@@ -81,6 +81,7 @@ export function CarritoProvider({ children }) {
             descripcion: producto.descripcion,
             clase: producto.clase,
             categoria: producto.categoria,
+            grupo_prueba: producto.grupo_prueba ?? null,
             cantidad: qty,
           },
         ]

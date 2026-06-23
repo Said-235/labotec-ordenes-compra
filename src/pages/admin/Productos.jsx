@@ -17,6 +17,7 @@ const FORM_VACIO = {
   clase: 'Reactivo',
   categoria: CATEGORIA_KEYS[0],
   precio_base: '',
+  grupo_prueba: '',
 }
 
 function Modal({ open, onClose, title, children }) {
@@ -104,6 +105,7 @@ export default function Productos() {
       clase: producto.clase,
       categoria: producto.categoria,
       precio_base: String(producto.precio_base),
+      grupo_prueba: producto.grupo_prueba ?? '',
     })
     setModalAbierto(true)
   }
@@ -117,6 +119,7 @@ export default function Productos() {
       const payload = {
         ...form,
         precio_base: Number(form.precio_base),
+        grupo_prueba: form.grupo_prueba.trim() || null,
       }
 
       if (editando) {
@@ -228,6 +231,7 @@ export default function Productos() {
                 <th className="px-4 py-3">Código</th>
                 <th className="px-4 py-3">Descripción</th>
                 <th className="px-4 py-3">Clase</th>
+                <th className="px-4 py-3">Grupo prueba</th>
                 <th className="px-4 py-3">Categoría</th>
                 <th className="px-4 py-3 text-right">Precio base</th>
                 <th className="px-4 py-3">Estado</th>
@@ -237,7 +241,7 @@ export default function Productos() {
             <tbody className="divide-y divide-gray-100">
               {productosFiltrados.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
                     No hay productos
                   </td>
                 </tr>
@@ -251,6 +255,9 @@ export default function Productos() {
                     <td className="px-4 py-3 max-w-xs truncate">{p.descripcion}</td>
                     <td className="px-4 py-3">
                       <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs">{p.clase}</span>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-gray-600">
+                      {p.grupo_prueba || '—'}
                     </td>
                     <td className="px-4 py-3 text-xs">{CATEGORIAS[p.categoria]}</td>
                     <td className="px-4 py-3 text-right">{formatMXN(p.precio_base)}</td>
@@ -350,6 +357,22 @@ export default function Productos() {
                 ))}
               </select>
             </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Grupo de prueba
+            </label>
+            <input
+              value={form.grupo_prueba}
+              onChange={(e) => setForm((f) => ({ ...f, grupo_prueba: e.target.value }))}
+              placeholder="Ej: TSH, GLUCOSA, HEMOGLOBINA"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+            <p className="mt-1 text-xs text-gray-400">
+              Reactivo, Calibrador y Control de la misma prueba deben compartir el mismo grupo.
+              Obligatorio para Calibrador y Control.
+            </p>
           </div>
 
           <div>

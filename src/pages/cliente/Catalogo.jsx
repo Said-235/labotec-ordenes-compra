@@ -30,7 +30,7 @@ export default function Catalogo() {
         const [productosRes, descuentoRes] = await Promise.all([
           supabase
             .from('productos')
-            .select('id, codigo, descripcion, clase, categoria, precio_base')
+            .select('id, codigo, descripcion, clase, categoria, precio_base, grupo_prueba')
             .eq('categoria', categoria)
             .eq('activo', true)
             .order('codigo'),

@@ -109,7 +109,7 @@ export default function CargaODS() {
               className="w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-labotec-teal file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-labotec-teal-dark"
             />
             <p className="mt-1 text-xs text-gray-400">
-              Columnas: Codigo, Descripcion, Clase, Costo — máx. 10 MB
+              Columnas: Codigo, Descripcion, Clase, Costo — opcional: Grupo / GrupoPrueba — máx. 10 MB
             </p>
           </div>
         </div>

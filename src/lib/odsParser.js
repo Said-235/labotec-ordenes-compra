@@ -20,6 +20,15 @@ const HEADER_ALIASES = {
   costo: 'costo',
 }
 
+const GRUPO_HEADER_KEYS = new Set([
+  'grupoprueba',
+  'grupo_prueba',
+  'grupo',
+  'prueba',
+  'testgroup',
+  'grupodeprueba',
+])
+
 function normalizeHeader(value) {
   return String(value ?? '')
     .trim()
@@ -64,6 +73,9 @@ function findHeaderRow(rows) {
       normalized.forEach((header, index) => {
         if (HEADER_ALIASES[header]) {
           columnMap[HEADER_ALIASES[header]] = index
+        }
+        if (GRUPO_HEADER_KEYS.has(header)) {
+          columnMap.grupo_prueba = index
         }
       })
 
@@ -175,12 +187,16 @@ export async function parseODSFile(file, categoria) {
       continue
     }
 
+    const grupoRaw = columnMap.grupo_prueba != null ? row[columnMap.grupo_prueba] : ''
+    const grupo_prueba = sanitizeText(grupoRaw, 100) || null
+
     validRows.push({
       codigo,
       descripcion,
       clase,
       precio_base: costo,
       categoria,
+      grupo_prueba,
     })
   }
 

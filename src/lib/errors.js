@@ -31,6 +31,9 @@ export function getSafeErrorMessage(error, fallback = 'Ocurrió un error inesper
     'Categoría inválida',
     'Precio base inválido',
     'Ya existe un producto con ese código en la misma categoría',
+    'Calibrador y Control requieren un grupo de prueba',
+    'no tiene grupo de prueba asignado',
+    'grupo de prueba',
   ]
 
   const message = error.message || String(error)

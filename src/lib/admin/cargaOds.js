@@ -33,13 +33,18 @@ export async function procesarCargaODS(file, categoria) {
     }
 
     if (existing) {
+      const updatePayload = {
+        descripcion: row.descripcion,
+        precio_base: row.precio_base,
+        activo: true,
+      }
+      if (row.grupo_prueba) {
+        updatePayload.grupo_prueba = row.grupo_prueba
+      }
+
       const { error: updateError } = await admin
         .from('productos')
-        .update({
-          descripcion: row.descripcion,
-          precio_base: row.precio_base,
-          activo: true,
-        })
+        .update(updatePayload)
         .eq('id', existing.id)
 
       if (updateError) {
@@ -58,6 +63,7 @@ export async function procesarCargaODS(file, categoria) {
         clase: row.clase,
         categoria: row.categoria,
         precio_base: row.precio_base,
+        grupo_prueba: row.grupo_prueba,
         activo: true,
       })
 

@@ -150,6 +150,7 @@ export default function Carrito() {
                       <th className="px-4 py-3">Código</th>
                       <th className="px-4 py-3">Descripción</th>
                       <th className="px-4 py-3">Clase</th>
+                      <th className="px-4 py-3">Grupo</th>
                       <th className="px-4 py-3">Cantidad</th>
                       <th className="px-4 py-3"></th>
                     </tr>
@@ -163,6 +164,9 @@ export default function Carrito() {
                           <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs">
                             {item.clase}
                           </span>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-gray-500">
+                          {item.grupo_prueba || '—'}
                         </td>
                         <td className="px-4 py-3">
                           <input

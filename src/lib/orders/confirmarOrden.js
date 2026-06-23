@@ -82,7 +82,7 @@ export async function confirmarOrden(cartItems) {
 
   const { data: productos, error: productosError } = await supabase
     .from('productos')
-    .select('id, codigo, descripcion, clase, categoria, precio_base, activo')
+    .select('id, codigo, descripcion, clase, categoria, precio_base, activo, grupo_prueba')
     .in('id', productoIds)
 
   if (productosError || !productos?.length) {
@@ -112,6 +112,7 @@ export async function confirmarOrden(cartItems) {
       descripcion: producto.descripcion,
       clase: producto.clase,
       categoria: producto.categoria,
+      grupo_prueba: producto.grupo_prueba ?? null,
       cantidad,
       precio_base_unitario: precioBase,
       precio_unitario: precioUnitario,

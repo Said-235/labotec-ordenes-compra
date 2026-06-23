@@ -1,5 +1,6 @@
 import { assertAdminSession, getSupabaseAdmin } from '../supabaseAdmin'
 import { CATEGORIA_KEYS, CLASES_PRODUCTO } from '../constants'
+import { CLASES_REQUIEREN_REACTIVO } from '../cartValidation'
 import { sanitizeText } from '../validation'
 
 function validateProductoInput(data, { isUpdate = false } = {}) {
@@ -7,6 +8,7 @@ function validateProductoInput(data, { isUpdate = false } = {}) {
   const descripcion = sanitizeText(data.descripcion, 500)
   const clase = sanitizeText(data.clase, 50)
   const categoria = sanitizeText(data.categoria, 50)
+  const grupoPrueba = data.grupo_prueba != null ? sanitizeText(data.grupo_prueba, 100) : undefined
   const precioBase = Number(data.precio_base)
 
   if (!isUpdate && !codigo) throw new Error('El código es requerido')
@@ -19,11 +21,20 @@ function validateProductoInput(data, { isUpdate = false } = {}) {
     throw new Error('Precio base inválido')
   }
 
+  const claseFinal = clase || data.clase
+  if (CLASES_REQUIEREN_REACTIVO.includes(claseFinal) && data.grupo_prueba !== undefined && !grupoPrueba) {
+    throw new Error('Calibrador y Control requieren un grupo de prueba')
+  }
+  if (!isUpdate && CLASES_REQUIEREN_REACTIVO.includes(claseFinal) && !grupoPrueba) {
+    throw new Error('Calibrador y Control requieren un grupo de prueba')
+  }
+
   return {
     codigo: codigo || undefined,
     descripcion: descripcion || undefined,
     clase: clase || undefined,
     categoria: categoria || undefined,
+    grupo_prueba: data.grupo_prueba !== undefined ? (grupoPrueba || null) : undefined,
     precio_base: data.precio_base != null ? Math.round(precioBase * 100) / 100 : undefined,
   }
 }
@@ -37,7 +48,7 @@ export async function listarProductos({ categoria, soloActivos } = {}) {
 
   let query = admin
     .from('productos')
-    .select('id, codigo, descripcion, clase, categoria, precio_base, activo, creado_en, actualizado_en')
+    .select('id, codigo, descripcion, clase, categoria, precio_base, grupo_prueba, activo, creado_en, actualizado_en')
     .order('categoria')
     .order('codigo')
 
@@ -66,6 +77,7 @@ export async function crearProducto(data) {
       clase: clean.clase,
       categoria: clean.categoria,
       precio_base: clean.precio_base,
+      grupo_prueba: clean.grupo_prueba ?? null,
       activo: true,
     })
     .select('id')
