@@ -1,0 +1,12 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-labotec-teal: #26a69a;
+  --color-labotec-teal-dark: #00897b;
+  --color-labotec-teal-light: #4db6ac;
+  --color-labotec-gray: #f5f7fa;
+}
+
+body {
+  @apply bg-labotec-gray text-gray-900 antialiased;
+}
