@@ -26,6 +26,11 @@ export function getSafeErrorMessage(error, fallback = 'Ocurrió un error inesper
     'El nombre es requerido',
     'Nivel inválido',
     'Porcentaje inválido (0–99.99)',
+    'El código es requerido',
+    'Clase inválida',
+    'Categoría inválida',
+    'Precio base inválido',
+    'Ya existe un producto con ese código en la misma categoría',
   ]
 
   const message = error.message || String(error)
