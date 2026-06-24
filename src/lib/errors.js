@@ -34,6 +34,10 @@ export function getSafeErrorMessage(error, fallback = 'Ocurrió un error inesper
     'Calibrador y Control requieren un grupo de prueba',
     'no tiene grupo de prueba asignado',
     'grupo de prueba',
+    'No se puede eliminar',
+    'en órdenes existentes',
+    'Seleccione al menos un producto',
+    'Esta carga no tiene productos registrados',
   ]
 
   const message = error.message || String(error)

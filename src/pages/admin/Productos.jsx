@@ -6,6 +6,10 @@ import {
   listarProductos,
   reactivarProducto,
 } from '../../lib/admin/productos'
+import {
+  eliminarProducto,
+  eliminarProductosLote,
+} from '../../lib/admin/eliminarProductos'
 import { CATEGORIAS, CATEGORIA_KEYS, CLASES_PRODUCTO } from '../../lib/constants'
 import { getSafeErrorMessage } from '../../lib/errors'
 import { formatMXN } from '../../lib/pricing'
@@ -52,6 +56,9 @@ export default function Productos() {
   const [editando, setEditando] = useState(null)
   const [form, setForm] = useState(FORM_VACIO)
   const [guardando, setGuardando] = useState(false)
+  const [seleccionados, setSeleccionados] = useState(new Set())
+  const [confirmar, setConfirmar] = useState(null)
+  const [eliminando, setEliminando] = useState(false)
 
   const cargar = useCallback(async () => {
     setLoading(true)
@@ -62,6 +69,7 @@ export default function Productos() {
         soloActivos: filtroActivo === 'activos',
       })
       setProductos(data)
+      setSeleccionados(new Set())
     } catch (err) {
       setError(getSafeErrorMessage(err, 'Error al cargar productos'))
     } finally {
@@ -155,22 +163,85 @@ export default function Productos() {
     }
   }
 
+  function toggleSeleccion(id) {
+    setSeleccionados((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function toggleSeleccionarTodos() {
+    if (seleccionados.size === productosFiltrados.length) {
+      setSeleccionados(new Set())
+    } else {
+      setSeleccionados(new Set(productosFiltrados.map((p) => p.id)))
+    }
+  }
+
+  async function ejecutarEliminacion() {
+    if (!confirmar) return
+    setEliminando(true)
+    setError('')
+
+    try {
+      if (confirmar.tipo === 'individual') {
+        await eliminarProducto(confirmar.id)
+        flash('Producto eliminado')
+      } else {
+        const res = await eliminarProductosLote(confirmar.ids)
+        let msg = `${res.eliminados} producto(s) eliminado(s)`
+        if (res.enOrdenes > 0) {
+          msg += `. ${res.enOrdenes} no se eliminaron (en órdenes existentes)`
+        }
+        flash(msg)
+      }
+      setConfirmar(null)
+      await cargar()
+    } catch (err) {
+      setError(getSafeErrorMessage(err, 'No se pudo eliminar'))
+    } finally {
+      setEliminando(false)
+    }
+  }
+
+  const todosSeleccionados =
+    productosFiltrados.length > 0 && seleccionados.size === productosFiltrados.length
+
   return (
     <div className="p-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Productos</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Catálogo manual — crear, editar y desactivar productos
+            Crear, editar, desactivar o eliminar productos del catálogo
           </p>
         </div>
-        <button
+        <div className="flex flex-wrap gap-2">
+          {seleccionados.size > 0 && (
+            <button
+              type="button"
+              onClick={() =>
+                setConfirmar({
+                  tipo: 'lote',
+                  ids: [...seleccionados],
+                  mensaje: `¿Eliminar ${seleccionados.size} producto(s) seleccionado(s)? Esta acción no se puede deshacer.`,
+                })
+              }
+              className="rounded-lg border border-red-300 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-100"
+            >
+              Eliminar seleccionados ({seleccionados.size})
+            </button>
+          )}
+          <button
           type="button"
           onClick={abrirCrear}
           className="rounded-lg bg-labotec-teal px-4 py-2 text-sm font-semibold text-white hover:bg-labotec-teal-dark"
         >
           + Nuevo producto
         </button>
+        </div>
       </div>
 
       {error && (
@@ -228,6 +299,14 @@ export default function Productos() {
           <table className="min-w-full text-left text-sm">
             <thead className="border-b bg-gray-50 text-xs uppercase text-gray-500">
               <tr>
+                <th className="px-4 py-3 w-10">
+                  <input
+                    type="checkbox"
+                    checked={todosSeleccionados}
+                    onChange={toggleSeleccionarTodos}
+                    title="Seleccionar todos"
+                  />
+                </th>
                 <th className="px-4 py-3">Código</th>
                 <th className="px-4 py-3">Descripción</th>
                 <th className="px-4 py-3">Clase</th>
@@ -241,7 +320,7 @@ export default function Productos() {
             <tbody className="divide-y divide-gray-100">
               {productosFiltrados.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={9} className="px-4 py-8 text-center text-gray-500">
                     No hay productos
                   </td>
                 </tr>
@@ -251,6 +330,13 @@ export default function Productos() {
                     key={p.id}
                     className={!p.activo ? 'bg-gray-50 opacity-70' : 'hover:bg-gray-50'}
                   >
+                    <td className="px-4 py-3">
+                      <input
+                        type="checkbox"
+                        checked={seleccionados.has(p.id)}
+                        onChange={() => toggleSeleccion(p.id)}
+                      />
+                    </td>
                     <td className="px-4 py-3 font-mono text-xs">{p.codigo}</td>
                     <td className="px-4 py-3 max-w-xs truncate">{p.descripcion}</td>
                     <td className="px-4 py-3">
@@ -278,6 +364,19 @@ export default function Productos() {
                           className="text-xs text-labotec-teal hover:underline"
                         >
                           Editar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setConfirmar({
+                              tipo: 'individual',
+                              id: p.id,
+                              mensaje: `¿Eliminar "${p.codigo}"? Esta acción no se puede deshacer.`,
+                            })
+                          }
+                          className="text-xs text-red-700 hover:underline"
+                        >
+                          Eliminar
                         </button>
                         <button
                           type="button"
@@ -396,6 +495,35 @@ export default function Productos() {
             {guardando ? 'Guardando…' : editando ? 'Guardar cambios' : 'Crear producto'}
           </button>
         </form>
+      </Modal>
+
+      <Modal
+        open={Boolean(confirmar)}
+        onClose={() => !eliminando && setConfirmar(null)}
+        title="Confirmar eliminación"
+      >
+        <p className="text-sm text-gray-600">{confirmar?.mensaje}</p>
+        <p className="mt-2 text-xs text-amber-700">
+          Los productos que aparezcan en órdenes existentes no se eliminarán.
+        </p>
+        <div className="mt-5 flex gap-3">
+          <button
+            type="button"
+            disabled={eliminando}
+            onClick={() => setConfirmar(null)}
+            className="flex-1 rounded-lg border border-gray-300 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            disabled={eliminando}
+            onClick={ejecutarEliminacion}
+            className="flex-1 rounded-lg bg-red-600 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+          >
+            {eliminando ? 'Eliminando…' : 'Eliminar'}
+          </button>
+        </div>
       </Modal>
     </div>
   )

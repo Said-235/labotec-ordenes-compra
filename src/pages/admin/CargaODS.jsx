@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { CATEGORIAS, CATEGORIA_KEYS } from '../../lib/constants'
 import { getSafeErrorMessage } from '../../lib/errors'
-import { procesarCargaODS, obtenerLogCargas } from '../../lib/admin/cargaOds'
+import { procesarCargaODS, obtenerLogCargas, eliminarProductosPorCarga } from '../../lib/admin/cargaOds'
 
 function formatFecha(iso) {
   return new Intl.DateTimeFormat('es-MX', {
@@ -19,6 +19,9 @@ export default function CargaODS() {
   const [resultado, setResultado] = useState(null)
   const [logs, setLogs] = useState([])
   const [cargandoLogs, setCargandoLogs] = useState(true)
+  const [confirmarEliminar, setConfirmarEliminar] = useState(null)
+  const [eliminando, setEliminando] = useState(false)
+  const [success, setSuccess] = useState('')
 
   useEffect(() => {
     async function cargarLogs() {
@@ -63,6 +66,29 @@ export default function CargaODS() {
       setError(getSafeErrorMessage(err, 'No se pudo procesar el archivo'))
     } finally {
       setProcesando(false)
+    }
+  }
+
+  async function handleEliminarCarga() {
+    if (!confirmarEliminar) return
+    setEliminando(true)
+    setError('')
+
+    try {
+      const res = await eliminarProductosPorCarga(confirmarEliminar.id)
+      let msg = `Carga "${res.nombreArchivo}": ${res.eliminados} producto(s) eliminado(s)`
+      if (res.enOrdenes > 0) {
+        msg += `. ${res.enOrdenes} no se eliminaron (en órdenes existentes)`
+      }
+      setSuccess(msg)
+      setTimeout(() => setSuccess(''), 6000)
+      setConfirmarEliminar(null)
+      const data = await obtenerLogCargas()
+      setLogs(data)
+    } catch (err) {
+      setError(getSafeErrorMessage(err, 'No se pudo eliminar la carga'))
+    } finally {
+      setEliminando(false)
     }
   }
 
@@ -120,6 +146,12 @@ export default function CargaODS() {
           </div>
         )}
 
+        {success && (
+          <div className="mt-4 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
+            {success}
+          </div>
+        )}
+
         {resultado && (
           <div className="mt-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-800">
             <p className="font-medium">Carga completada</p>
@@ -172,10 +204,14 @@ export default function CargaODS() {
                   <th className="px-4 py-3">Ins.</th>
                   <th className="px-4 py-3">Act.</th>
                   <th className="px-4 py-3">Err.</th>
+                  <th className="px-4 py-3">Prod.</th>
+                  <th className="px-4 py-3">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {logs.map((log) => (
+                {logs.map((log) => {
+                  const countProd = Array.isArray(log.producto_ids) ? log.producto_ids.length : 0
+                  return (
                   <tr key={log.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 whitespace-nowrap">{formatFecha(log.creado_en)}</td>
                     <td className="px-4 py-3">{CATEGORIAS[log.categoria] ?? log.categoria}</td>
@@ -184,13 +220,67 @@ export default function CargaODS() {
                     <td className="px-4 py-3 text-green-700">{log.insertados}</td>
                     <td className="px-4 py-3 text-blue-700">{log.actualizados}</td>
                     <td className="px-4 py-3 text-red-600">{log.errores}</td>
+                    <td className="px-4 py-3 text-gray-600">{countProd || '—'}</td>
+                    <td className="px-4 py-3">
+                      {countProd > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setConfirmarEliminar({
+                              id: log.id,
+                              nombre: log.nombre_archivo,
+                              count: countProd,
+                            })
+                          }
+                          className="text-xs text-red-700 hover:underline"
+                        >
+                          Eliminar carga
+                        </button>
+                      ) : (
+                        <span className="text-xs text-gray-400">—</span>
+                      )}
+                    </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>
         )}
       </section>
+
+      {confirmarEliminar && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+            <h2 className="text-lg font-semibold text-gray-900">Eliminar productos de carga ODS</h2>
+            <p className="mt-3 text-sm text-gray-600">
+              ¿Eliminar los {confirmarEliminar.count} producto(s) de la carga{' '}
+              <strong>{confirmarEliminar.nombre}</strong>? Esta acción no se puede deshacer.
+            </p>
+            <p className="mt-2 text-xs text-amber-700">
+              Los productos que aparezcan en órdenes existentes no se eliminarán.
+            </p>
+            <div className="mt-5 flex gap-3">
+              <button
+                type="button"
+                disabled={eliminando}
+                onClick={() => setConfirmarEliminar(null)}
+                className="flex-1 rounded-lg border border-gray-300 py-2 text-sm font-medium hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={eliminando}
+                onClick={handleEliminarCarga}
+                className="flex-1 rounded-lg bg-red-600 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+              >
+                {eliminando ? 'Eliminando…' : 'Eliminar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

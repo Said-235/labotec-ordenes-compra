@@ -1,26 +1,20 @@
 import { useState } from 'react'
-import { Navigate, useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { getSafeErrorMessage } from '../lib/errors'
 import { validateLoginInput } from '../lib/validation'
 
 export default function Login() {
-  const { signIn, isAuthenticated, isAdmin, needsDatosFiscales, loading } = useAuth()
+  const { signIn } = useAuth()
+  const navigate = useNavigate()
   const location = useLocation()
+  const from = location.state?.from?.pathname
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
   const [submitError, setSubmitError] = useState('')
   const [submitting, setSubmitting] = useState(false)
-
-  const from = location.state?.from?.pathname
-
-  if (!loading && isAuthenticated) {
-    if (needsDatosFiscales) return <Navigate to="/datos-fiscales" replace />
-    if (isAdmin) return <Navigate to={from?.startsWith('/admin') ? from : '/admin'} replace />
-    return <Navigate to={from && !from.startsWith('/admin') ? from : '/catalogo'} replace />
-  }
 
   async function handleSubmit(event) {
     event.preventDefault()
@@ -37,7 +31,15 @@ export default function Login() {
     setSubmitting(true)
 
     try {
-      await signIn(cleanEmail, cleanPassword)
+      const profile = await signIn(cleanEmail, cleanPassword)
+
+      if (profile.primer_login && !profile.es_admin) {
+        navigate('/datos-fiscales', { replace: true })
+      } else if (profile.es_admin) {
+        navigate(from?.startsWith('/admin') ? from : '/admin', { replace: true })
+      } else {
+        navigate(from && !from.startsWith('/admin') ? from : '/catalogo', { replace: true })
+      }
     } catch (err) {
       setSubmitError(getSafeErrorMessage(err, 'No se pudo iniciar sesión'))
     } finally {

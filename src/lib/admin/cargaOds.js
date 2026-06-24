@@ -1,4 +1,7 @@
 import { assertAdminSession, getSupabaseAdmin } from '../supabaseAdmin'
+import { eliminarProductosPorCarga } from './eliminarProductos'
+
+export { eliminarProductosPorCarga }
 import { parseODSFile } from '../odsParser'
 import { sanitizeText } from '../validation'
 
@@ -14,6 +17,7 @@ export async function procesarCargaODS(file, categoria) {
 
   let insertados = 0
   let actualizados = 0
+  const productoIdsAfectados = []
 
   for (const row of validRows) {
     const { data: existing, error: lookupError } = await admin
@@ -55,9 +59,10 @@ export async function procesarCargaODS(file, categoria) {
         })
       } else {
         actualizados += 1
+        productoIdsAfectados.push(existing.id)
       }
     } else {
-      const { error: insertError } = await admin.from('productos').insert({
+      const { data: inserted, error: insertError } = await admin.from('productos').insert({
         codigo: row.codigo,
         descripcion: row.descripcion,
         clase: row.clase,
@@ -65,7 +70,7 @@ export async function procesarCargaODS(file, categoria) {
         precio_base: row.precio_base,
         grupo_prueba: row.grupo_prueba,
         activo: true,
-      })
+      }).select('id').single()
 
       if (insertError) {
         errors.push({
@@ -75,9 +80,12 @@ export async function procesarCargaODS(file, categoria) {
         })
       } else {
         insertados += 1
+        productoIdsAfectados.push(inserted.id)
       }
     }
   }
+
+  const idsUnicos = [...new Set(productoIdsAfectados)]
 
   const detalleErrores = errors.slice(0, 100).map((e) => ({
     fila: e.fila,
@@ -94,6 +102,7 @@ export async function procesarCargaODS(file, categoria) {
     actualizados,
     errores: errors.length,
     detalle_errores: detalleErrores.length ? detalleErrores : null,
+    producto_ids: idsUnicos,
   })
 
   if (logError) {

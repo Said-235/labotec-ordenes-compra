@@ -1,8 +1,10 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { CarritoProvider } from './context/CarritoContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import AdminRoute from './components/AdminRoute'
+import GuestRoute from './components/GuestRoute'
+import RootRedirect from './components/RootRedirect'
 import AdminLayout from './components/AdminLayout'
 import ClientLayout from './components/ClientLayout'
 import Login from './pages/Login'
@@ -22,7 +24,11 @@ export default function App() {
       <CarritoProvider>
         <BrowserRouter>
           <Routes>
-            <Route path="/login" element={<Login />} />
+            <Route path="/" element={<RootRedirect />} />
+
+            <Route element={<GuestRoute />}>
+              <Route path="/login" element={<Login />} />
+            </Route>
 
             <Route element={<ProtectedRoute />}>
               <Route path="/datos-fiscales" element={<DatosFiscales />} />
@@ -43,8 +49,7 @@ export default function App() {
               </Route>
             </Route>
 
-            <Route path="/" element={<Navigate to="/catalogo" replace />} />
-            <Route path="*" element={<Navigate to="/catalogo" replace />} />
+            <Route path="*" element={<RootRedirect />} />
           </Routes>
         </BrowserRouter>
       </CarritoProvider>

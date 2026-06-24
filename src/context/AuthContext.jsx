@@ -66,6 +66,8 @@ export function AuthProvider({ children }) {
         if (mounted) {
           setError(getSafeErrorMessage(err))
           setCliente(null)
+          await supabase.auth.signOut()
+          setSession(null)
         }
       } finally {
         if (mounted) setLoading(false)
@@ -86,6 +88,8 @@ export function AuthProvider({ children }) {
         } catch (err) {
           setError(getSafeErrorMessage(err))
           setCliente(null)
+          await supabase.auth.signOut()
+          setSession(null)
         }
       } else {
         setCliente(null)
