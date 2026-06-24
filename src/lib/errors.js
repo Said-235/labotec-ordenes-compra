@@ -43,6 +43,12 @@ export function getSafeErrorMessage(error, fallback = 'Ocurrió un error inesper
     'Seleccione al menos un producto',
     'No se pudieron guardar los cambios',
     'El nombre de contacto es requerido',
+    'No puede desactivar su propia cuenta',
+    'Debe haber al menos un administrador activo',
+    'La contraseña debe tener al menos 12 caracteres',
+    'La contraseña debe incluir mayúsculas',
+    'No se pudo crear el administrador',
+    'Administrador no encontrado',
   ]
 
   const message = error.message || String(error)

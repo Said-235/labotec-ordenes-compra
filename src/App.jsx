@@ -17,6 +17,7 @@ import Dashboard from './pages/admin/Dashboard'
 import CargaODS from './pages/admin/CargaODS'
 import OrdenesAdmin from './pages/admin/Ordenes'
 import Clientes from './pages/admin/Clientes'
+import Administradores from './pages/admin/Administradores'
 import Productos from './pages/admin/Productos'
 
 export default function App() {
@@ -45,6 +46,7 @@ export default function App() {
               <Route element={<AdminLayout />}>
                 <Route path="/admin" element={<Dashboard />} />
                 <Route path="/admin/clientes" element={<Clientes />} />
+                <Route path="/admin/administradores" element={<Administradores />} />
                 <Route path="/admin/productos" element={<Productos />} />
                 <Route path="/admin/carga-ods" element={<CargaODS />} />
                 <Route path="/admin/ordenes" element={<OrdenesAdmin />} />

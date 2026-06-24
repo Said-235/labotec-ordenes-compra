@@ -10,6 +10,11 @@ const cards = [
     description: 'Crear cuentas, asignar nivel y configurar descuentos',
   },
   {
+    to: '/admin/administradores',
+    title: 'Administradores',
+    description: 'Crear cuentas admin para validar órdenes y gestionar el sistema',
+  },
+  {
     to: '/admin/productos',
     title: 'Productos',
     description: 'Crear, editar y desactivar productos del catálogo',
