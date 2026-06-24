@@ -41,7 +41,8 @@ export function getSafeErrorMessage(error, fallback = 'Ocurrió un error inesper
     'No se puede eliminar',
     'en órdenes existentes',
     'Seleccione al menos un producto',
-    'Esta carga no tiene productos registrados',
+    'No se pudieron guardar los cambios',
+    'El nombre de contacto es requerido',
   ]
 
   const message = error.message || String(error)

@@ -7,6 +7,7 @@ const navItems = [
   { to: '/catalogo', label: 'Catálogo', end: true },
   { to: '/carrito', label: 'Carrito' },
   { to: '/mis-ordenes', label: 'Mis órdenes' },
+  { to: '/mi-cuenta', label: 'Mi cuenta' },
 ]
 
 export default function ClientLayout() {

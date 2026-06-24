@@ -78,3 +78,25 @@ export function validateDatosFiscales(data) {
 
   return { errors, sanitized }
 }
+
+/**
+ * Valida nombre de contacto + datos fiscales para actualización de perfil.
+ */
+export function validatePerfilCliente(data) {
+  const nombre = sanitizeText(data.nombre, 200)
+  const errors = {}
+
+  if (!nombre) {
+    errors.nombre = 'El nombre de contacto es requerido'
+  }
+
+  const { errors: fiscalErrors, sanitized: datosFiscales } = validateDatosFiscales(data)
+
+  return {
+    errors: { ...errors, ...fiscalErrors },
+    sanitized: {
+      nombre,
+      datos_fiscales: datosFiscales,
+    },
+  }
+}

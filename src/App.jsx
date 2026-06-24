@@ -12,6 +12,7 @@ import DatosFiscales from './pages/DatosFiscales'
 import Catalogo from './pages/cliente/Catalogo'
 import Carrito from './pages/cliente/Carrito'
 import MisOrdenes from './pages/cliente/MisOrdenes'
+import MiCuenta from './pages/cliente/MiCuenta'
 import Dashboard from './pages/admin/Dashboard'
 import CargaODS from './pages/admin/CargaODS'
 import OrdenesAdmin from './pages/admin/Ordenes'
@@ -36,6 +37,7 @@ export default function App() {
                 <Route path="/catalogo" element={<Catalogo />} />
                 <Route path="/carrito" element={<Carrito />} />
                 <Route path="/mis-ordenes" element={<MisOrdenes />} />
+                <Route path="/mi-cuenta" element={<MiCuenta />} />
               </Route>
             </Route>
 
