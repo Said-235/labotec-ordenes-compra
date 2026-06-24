@@ -100,7 +100,8 @@ export default function MisOrdenes() {
             const comprobante = orden.comprobantes?.[0]
             const expanded = expandedId === orden.id
             const puedeSubirComprobante =
-              orden.status === 'pendiente' && !comprobante
+              orden.status === 'pendiente' &&
+              (!comprobante || comprobante.rechazado)
 
             return (
               <article
@@ -144,20 +145,41 @@ export default function MisOrdenes() {
                             <> — Validado: {formatFecha(comprobante.validado_en)}</>
                           )}
                         </p>
-                        <button
-                          type="button"
-                          onClick={() => handleVerComprobante(comprobante.url_archivo)}
-                          className="mt-2 text-xs text-labotec-teal hover:underline"
-                        >
-                          Ver comprobante
-                        </button>
-                        {!comprobante.validado && (
-                          <p className="mt-2 text-xs text-amber-700">En revisión por administración</p>
+                        {!comprobante.rechazado && (
+                          <button
+                            type="button"
+                            onClick={() => handleVerComprobante(comprobante.url_archivo)}
+                            className="mt-2 text-xs text-labotec-teal hover:underline"
+                          >
+                            Ver comprobante
+                          </button>
                         )}
-                        {comprobante.notas_admin && (
+                        {!comprobante.validado && !comprobante.rechazado && (
+                          <p className="mt-2 text-xs text-amber-700">
+                            En revisión por administración
+                          </p>
+                        )}
+                        {comprobante.validado && comprobante.notas_admin && (
                           <p className="mt-2 text-xs text-gray-600">
                             Notas: {comprobante.notas_admin}
                           </p>
+                        )}
+                        {comprobante.rechazado && (
+                          <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-800">
+                            <p className="font-semibold">Comprobante rechazado</p>
+                            {comprobante.rechazado_en && (
+                              <p className="mt-1 text-red-600">
+                                {formatFecha(comprobante.rechazado_en)}
+                              </p>
+                            )}
+                            <p className="mt-2">
+                              <span className="font-medium">Motivo: </span>
+                              {comprobante.notas_admin || 'Sin detalle'}
+                            </p>
+                            <p className="mt-2 text-red-700">
+                              Suba un nuevo comprobante corregido.
+                            </p>
+                          </div>
                         )}
                       </div>
                     )}

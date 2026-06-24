@@ -61,7 +61,7 @@ export async function subirComprobante(ordenId, file) {
 
   const { data: existente } = await supabase
     .from('comprobantes')
-    .select('id, validado')
+    .select('id, validado, rechazado, url_archivo')
     .eq('orden_id', ordenId)
     .maybeSingle()
 
@@ -69,7 +69,19 @@ export async function subirComprobante(ordenId, file) {
     if (existente.validado) {
       throw new Error('Esta orden ya tiene un comprobante validado')
     }
-    throw new Error('Ya hay un comprobante en revisión para esta orden')
+    if (existente.rechazado) {
+      await supabase.storage.from('documentos').remove([existente.url_archivo])
+      const { error: deleteError } = await supabase
+        .from('comprobantes')
+        .delete()
+        .eq('id', existente.id)
+
+      if (deleteError) {
+        throw new Error('No se pudo reemplazar el comprobante rechazado')
+      }
+    } else {
+      throw new Error('Ya hay un comprobante en revisión para esta orden')
+    }
   }
 
   const fileName = sanitizeFileName(file.name)

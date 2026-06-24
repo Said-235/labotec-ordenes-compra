@@ -51,6 +51,8 @@ export async function obtenerMisOrdenes() {
         url_archivo,
         validado,
         validado_en,
+        rechazado,
+        rechazado_en,
         notas_admin,
         creado_en
       ),

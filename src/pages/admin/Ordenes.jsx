@@ -5,6 +5,7 @@ import {
   getOrdenPdfAdminUrl,
   obtenerTodasOrdenes,
   validarComprobante,
+  rechazarComprobante,
 } from '../../lib/admin/ordenes'
 import { CATEGORIAS } from '../../lib/constants'
 import { getSafeErrorMessage } from '../../lib/errors'
@@ -24,7 +25,9 @@ export default function OrdenesAdmin() {
   const [filtroStatus, setFiltroStatus] = useState('pendiente')
   const [expandedId, setExpandedId] = useState(null)
   const [notas, setNotas] = useState({})
+  const [motivosRechazo, setMotivosRechazo] = useState({})
   const [validando, setValidando] = useState(null)
+  const [rechazando, setRechazando] = useState(null)
 
   const cargarOrdenes = useCallback(async () => {
     setLoading(true)
@@ -58,6 +61,26 @@ export default function OrdenesAdmin() {
     }
   }
 
+  async function handleRechazar(comprobanteId) {
+    const motivo = motivosRechazo[comprobanteId]?.trim() ?? ''
+    if (motivo.length < 5) {
+      setError('Indique el motivo del rechazo (mínimo 5 caracteres)')
+      return
+    }
+
+    setRechazando(comprobanteId)
+    setError('')
+    try {
+      await rechazarComprobante(comprobanteId, motivo)
+      setMotivosRechazo((prev) => ({ ...prev, [comprobanteId]: '' }))
+      await cargarOrdenes()
+    } catch (err) {
+      setError(getSafeErrorMessage(err, 'No se pudo rechazar el comprobante'))
+    } finally {
+      setRechazando(null)
+    }
+  }
+
   async function handleVerComprobante(path) {
     try {
       const url = await getComprobanteAdminUrl(path)
@@ -80,8 +103,8 @@ export default function OrdenesAdmin() {
     }
   }
 
-  const pendientesValidacion = ordenes.filter(
-    (o) => o.comprobantes?.some((c) => !c.validado),
+  const pendientesValidacion = ordenes.filter((o) =>
+    o.comprobantes?.some((c) => !c.validado && !c.rechazado),
   )
 
   return (
@@ -176,40 +199,85 @@ export default function OrdenesAdmin() {
                           Ver comprobante
                         </button>
 
-                        {!comprobante.validado && orden.status === 'pendiente' && (
-                          <div className="mt-4 border-t border-gray-200 pt-4">
-                            <label className="block text-xs font-medium text-gray-600">
-                              Notas (opcional)
-                            </label>
-                            <input
-                              type="text"
-                              value={notas[comprobante.id] ?? ''}
-                              onChange={(e) =>
-                                setNotas((prev) => ({
-                                  ...prev,
-                                  [comprobante.id]: e.target.value,
-                                }))
-                              }
-                              className="mt-1 w-full rounded border border-gray-300 px-2 py-1 text-sm"
-                              placeholder="Referencia interna…"
-                            />
-                            <button
-                              type="button"
-                              disabled={validando === comprobante.id}
-                              onClick={() => handleValidar(comprobante.id)}
-                              className="mt-3 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-60"
-                            >
-                              {validando === comprobante.id
-                                ? 'Validando…'
-                                : 'Validar y marcar como pagada'}
-                            </button>
+                        {!comprobante.validado && !comprobante.rechazado && orden.status === 'pendiente' && (
+                          <div className="mt-4 space-y-4 border-t border-gray-200 pt-4">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600">
+                                Notas al aprobar (opcional)
+                              </label>
+                              <input
+                                type="text"
+                                value={notas[comprobante.id] ?? ''}
+                                onChange={(e) =>
+                                  setNotas((prev) => ({
+                                    ...prev,
+                                    [comprobante.id]: e.target.value,
+                                  }))
+                                }
+                                className="mt-1 w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                                placeholder="Referencia interna…"
+                              />
+                              <button
+                                type="button"
+                                disabled={validando === comprobante.id || rechazando === comprobante.id}
+                                onClick={() => handleValidar(comprobante.id)}
+                                className="mt-3 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-60"
+                              >
+                                {validando === comprobante.id
+                                  ? 'Validando…'
+                                  : 'Validar y marcar como pagada'}
+                              </button>
+                            </div>
+
+                            <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+                              <label className="block text-xs font-medium text-red-800">
+                                Motivo del rechazo (requerido)
+                              </label>
+                              <textarea
+                                value={motivosRechazo[comprobante.id] ?? ''}
+                                onChange={(e) =>
+                                  setMotivosRechazo((prev) => ({
+                                    ...prev,
+                                    [comprobante.id]: e.target.value,
+                                  }))
+                                }
+                                rows={2}
+                                className="mt-1 w-full rounded border border-red-200 px-2 py-1 text-sm"
+                                placeholder="Ej: El monto no coincide, imagen ilegible, cuenta incorrecta…"
+                              />
+                              <button
+                                type="button"
+                                disabled={rechazando === comprobante.id || validando === comprobante.id}
+                                onClick={() => handleRechazar(comprobante.id)}
+                                className="mt-2 rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-60"
+                              >
+                                {rechazando === comprobante.id
+                                  ? 'Rechazando…'
+                                  : 'Rechazar comprobante'}
+                              </button>
+                            </div>
                           </div>
                         )}
 
                         {comprobante.validado && (
                           <p className="mt-2 text-xs text-green-700">
                             Validado el {formatFecha(comprobante.validado_en)}
+                            {comprobante.notas_admin && (
+                              <> — {comprobante.notas_admin}</>
+                            )}
                           </p>
+                        )}
+
+                        {comprobante.rechazado && (
+                          <div className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-800">
+                            <p className="font-medium">
+                              Rechazado el {formatFecha(comprobante.rechazado_en)}
+                            </p>
+                            <p className="mt-1">Motivo: {comprobante.notas_admin}</p>
+                            <p className="mt-1 text-red-600">
+                              El cliente puede subir un nuevo comprobante.
+                            </p>
+                          </div>
                         )}
                       </div>
                     ) : (

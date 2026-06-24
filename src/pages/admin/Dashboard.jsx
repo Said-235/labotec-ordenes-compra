@@ -34,7 +34,7 @@ async function fetchStats() {
     admin.from('clientes').select('id', { count: 'exact', head: true }).eq('es_admin', false).eq('activo', true),
     admin.from('productos').select('id', { count: 'exact', head: true }).eq('activo', true),
     admin.from('ordenes').select('id', { count: 'exact', head: true }).eq('status', 'pendiente'),
-    admin.from('comprobantes').select('id', { count: 'exact', head: true }).eq('validado', false),
+    admin.from('comprobantes').select('id', { count: 'exact', head: true }).eq('validado', false).eq('rechazado', false),
   ])
 
   return {

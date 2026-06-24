@@ -31,6 +31,8 @@ export async function obtenerTodasOrdenes({ status } = {}) {
         url_archivo,
         validado,
         validado_en,
+        rechazado,
+        rechazado_en,
         notas_admin,
         creado_en
       ),
@@ -62,7 +64,7 @@ export async function validarComprobante(comprobanteId, notasAdmin = '') {
 
   const { data: comprobante, error: compError } = await admin
     .from('comprobantes')
-    .select('id, orden_id, validado')
+    .select('id, orden_id, validado, rechazado')
     .eq('id', comprobanteId)
     .single()
 
@@ -72,6 +74,10 @@ export async function validarComprobante(comprobanteId, notasAdmin = '') {
 
   if (comprobante.validado) {
     throw new Error('El comprobante ya fue validado')
+  }
+
+  if (comprobante.rechazado) {
+    throw new Error('Este comprobante ya fue rechazado')
   }
 
   const { data: orden, error: ordenError } = await admin
@@ -120,6 +126,69 @@ export async function validarComprobante(comprobanteId, notasAdmin = '') {
       .update({ validado: false, validado_por: null, validado_en: null })
       .eq('id', comprobanteId)
     throw new Error('No se pudo marcar la orden como pagada')
+  }
+
+  return { ordenId: comprobante.orden_id }
+}
+
+/**
+ * Rechaza un comprobante. La orden permanece pendiente; el cliente puede ver el motivo y subir otro.
+ */
+export async function rechazarComprobante(comprobanteId, motivoRechazo) {
+  const { user } = await assertAdminSession()
+  const admin = getSupabaseAdmin()
+
+  const motivo = sanitizeText(motivoRechazo, 500)
+  if (!motivo || motivo.length < 5) {
+    throw new Error('Indique el motivo del rechazo (mínimo 5 caracteres)')
+  }
+
+  const { data: comprobante, error: compError } = await admin
+    .from('comprobantes')
+    .select('id, orden_id, validado, rechazado')
+    .eq('id', comprobanteId)
+    .single()
+
+  if (compError || !comprobante) {
+    throw new Error('Comprobante no encontrado')
+  }
+
+  if (comprobante.validado) {
+    throw new Error('No se puede rechazar un comprobante ya validado')
+  }
+
+  if (comprobante.rechazado) {
+    throw new Error('Este comprobante ya fue rechazado')
+  }
+
+  const { data: orden, error: ordenError } = await admin
+    .from('ordenes')
+    .select('id, status')
+    .eq('id', comprobante.orden_id)
+    .single()
+
+  if (ordenError || !orden) {
+    throw new Error('Orden no encontrada')
+  }
+
+  if (orden.status !== 'pendiente') {
+    throw new Error('La orden no está pendiente de pago')
+  }
+
+  const now = new Date().toISOString()
+
+  const { error: updateError } = await admin
+    .from('comprobantes')
+    .update({
+      rechazado: true,
+      rechazado_en: now,
+      rechazado_por: user.id,
+      notas_admin: motivo,
+    })
+    .eq('id', comprobanteId)
+
+  if (updateError) {
+    throw new Error('No se pudo rechazar el comprobante')
   }
 
   return { ordenId: comprobante.orden_id }
