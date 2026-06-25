@@ -49,6 +49,10 @@ export function getSafeErrorMessage(error, fallback = 'Ocurrió un error inesper
     'La contraseña debe incluir mayúsculas',
     'No se pudo crear el administrador',
     'Administrador no encontrado',
+    'Solo puede cancelar órdenes pendientes de pago',
+    'No puede cancelar esta orden',
+    'No se pudo cancelar la orden',
+    'No se pudo verificar el comprobante de pago',
   ]
 
   const message = error.message || String(error)

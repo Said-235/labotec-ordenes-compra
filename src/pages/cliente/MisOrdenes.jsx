@@ -5,7 +5,7 @@ import StatusBadge from '../../components/StatusBadge'
 import { getComprobanteSignedUrl } from '../../lib/comprobantes'
 import { CATEGORIAS } from '../../lib/constants'
 import { getSafeErrorMessage } from '../../lib/errors'
-import { obtenerMisOrdenes, getOrdenPdfUrl } from '../../lib/ordenes'
+import { obtenerMisOrdenes, getOrdenPdfUrl, cancelarOrden, puedeCancelarOrden } from '../../lib/ordenes'
 import { formatMXN } from '../../lib/pricing'
 
 function formatFecha(iso) {
@@ -22,6 +22,8 @@ export default function MisOrdenes() {
   const [error, setError] = useState('')
   const [expandedId, setExpandedId] = useState(null)
   const [filtroStatus, setFiltroStatus] = useState('')
+  const [confirmarCancelar, setConfirmarCancelar] = useState(null)
+  const [cancelando, setCancelando] = useState(false)
 
   const cargarOrdenes = useCallback(async () => {
     setLoading(true)
@@ -56,6 +58,30 @@ export default function MisOrdenes() {
       window.open(url, '_blank', 'noopener,noreferrer')
     } catch {
       setError('No se pudo abrir el comprobante')
+    }
+  }
+
+  async function handleCancelarOrden() {
+    if (!confirmarCancelar) return
+    if (!puedeCancelarOrden(confirmarCancelar)) {
+      setConfirmarCancelar(null)
+      setError(
+        'No puede cancelar esta orden: ya subió un comprobante de pago o está en revisión',
+      )
+      return
+    }
+    setCancelando(true)
+    setError('')
+    try {
+      const ordenId = confirmarCancelar.id
+      await cancelarOrden(ordenId)
+      setConfirmarCancelar(null)
+      setExpandedId((prev) => (prev === ordenId ? null : prev))
+      await cargarOrdenes()
+    } catch (err) {
+      setError(getSafeErrorMessage(err, 'No se pudo cancelar la orden'))
+    } finally {
+      setCancelando(false)
     }
   }
 
@@ -102,6 +128,7 @@ export default function MisOrdenes() {
             const puedeSubirComprobante =
               orden.status === 'pendiente' &&
               (!comprobante || comprobante.rechazado)
+            const puedeCancelar = puedeCancelarOrden(orden)
 
             return (
               <article
@@ -126,7 +153,7 @@ export default function MisOrdenes() {
                   <div className="border-t border-gray-100 px-4 pb-4">
                     <p className="mt-3 font-mono text-xs text-gray-400">{orden.id}</p>
 
-                    <div className="mt-3 flex flex-wrap gap-2">
+                    <div className="mt-3 flex flex-wrap items-center gap-3">
                       <button
                         type="button"
                         onClick={() => handleDescargarPdf(orden)}
@@ -134,7 +161,22 @@ export default function MisOrdenes() {
                       >
                         Descargar PDF
                       </button>
+                      {puedeCancelar && (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmarCancelar(orden)}
+                          className="text-sm text-red-600 hover:underline"
+                        >
+                          Cancelar orden
+                        </button>
+                      )}
                     </div>
+
+                    {puedeCancelar && (
+                      <p className="mt-2 text-xs text-gray-500">
+                        Puede cancelar mientras no haya subido un comprobante de pago.
+                      </p>
+                    )}
 
                     {comprobante && (
                       <div className="mt-3 rounded-lg bg-gray-50 p-3 text-sm">
@@ -221,6 +263,40 @@ export default function MisOrdenes() {
               </article>
             )
           })}
+        </div>
+      )}
+
+      {confirmarCancelar && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+            <h2 className="text-lg font-semibold text-gray-900">Cancelar orden</h2>
+            <p className="mt-3 text-sm text-gray-600">
+              ¿Cancelar la orden de{' '}
+              <strong>{CATEGORIAS[confirmarCancelar.categoria]}</strong> por{' '}
+              <strong>{formatMXN(confirmarCancelar.total)}</strong>?
+            </p>
+            <p className="mt-2 text-xs text-amber-700">
+              Esta acción no se puede deshacer. Solo es posible si no ha subido un comprobante.
+            </p>
+            <div className="mt-5 flex gap-3">
+              <button
+                type="button"
+                disabled={cancelando}
+                onClick={() => setConfirmarCancelar(null)}
+                className="flex-1 rounded-lg border border-gray-300 py-2 text-sm font-medium hover:bg-gray-50"
+              >
+                Volver
+              </button>
+              <button
+                type="button"
+                disabled={cancelando}
+                onClick={handleCancelarOrden}
+                className="flex-1 rounded-lg bg-red-600 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+              >
+                {cancelando ? 'Cancelando…' : 'Confirmar cancelación'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

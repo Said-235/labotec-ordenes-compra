@@ -75,3 +75,69 @@ export async function obtenerMisOrdenes() {
   if (error) throw new Error('No se pudieron cargar las órdenes')
   return data ?? []
 }
+
+/**
+ * Indica si el cliente puede cancelar la orden (solo pendiente sin comprobante).
+ */
+export function puedeCancelarOrden(orden) {
+  if (orden.status !== 'pendiente') return false
+  const comprobantes = orden.comprobantes ?? []
+  return comprobantes.length === 0
+}
+
+/**
+ * Cancela una orden pendiente sin comprobante de pago.
+ */
+export async function cancelarOrden(ordenId) {
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
+
+  if (authError || !user) throw new Error('Sesión no válida')
+
+  const { data: orden, error: ordenError } = await supabase
+    .from('ordenes')
+    .select('id, status, cliente_id')
+    .eq('id', ordenId)
+    .eq('cliente_id', user.id)
+    .single()
+
+  if (ordenError || !orden) {
+    throw new Error('Orden no encontrada')
+  }
+
+  if (orden.status !== 'pendiente') {
+    throw new Error('Solo puede cancelar órdenes pendientes de pago')
+  }
+
+  const { count, error: compError } = await supabase
+    .from('comprobantes')
+    .select('id', { count: 'exact', head: true })
+    .eq('orden_id', ordenId)
+
+  if (compError) {
+    throw new Error('No se pudo verificar el comprobante de pago')
+  }
+
+  if ((count ?? 0) > 0) {
+    throw new Error(
+      'No puede cancelar esta orden: ya subió un comprobante de pago o está en revisión',
+    )
+  }
+
+  const { data: actualizada, error: updateError } = await supabase
+    .from('ordenes')
+    .update({ status: 'cancelada' })
+    .eq('id', ordenId)
+    .eq('cliente_id', user.id)
+    .eq('status', 'pendiente')
+    .select('id')
+    .maybeSingle()
+
+  if (updateError || !actualizada) {
+    throw new Error('No se pudo cancelar la orden')
+  }
+
+  return { id: ordenId }
+}
