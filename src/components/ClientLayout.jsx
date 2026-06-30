@@ -1,11 +1,13 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useCarrito } from '../hooks/useCarrito'
+import { useNotificaciones } from '../hooks/useNotificaciones'
 import { NIVELES_CLIENTE } from '../lib/constants'
 
 const navItems = [
   { to: '/catalogo', label: 'Catálogo', end: true },
   { to: '/carrito', label: 'Carrito' },
+  { to: '/notificaciones', label: 'Notificaciones', badge: 'notificaciones' },
   { to: '/mis-ordenes', label: 'Mis órdenes' },
   { to: '/mi-cuenta', label: 'Mi cuenta' },
 ]
@@ -13,6 +15,7 @@ const navItems = [
 export default function ClientLayout() {
   const { cliente, signOut } = useAuth()
   const { totalItems } = useCarrito()
+  const { noLeidas: notificacionesNoLeidas } = useNotificaciones()
 
   return (
     <div className="min-h-screen">
@@ -31,7 +34,7 @@ export default function ClientLayout() {
           </div>
 
           <nav className="flex items-center gap-4">
-            {navItems.map(({ to, label, end }) => (
+            {navItems.map(({ to, label, end, badge }) => (
               <NavLink
                 key={to}
                 to={to}
@@ -46,6 +49,11 @@ export default function ClientLayout() {
                 {to === '/carrito' && totalItems > 0 && (
                   <span className="absolute -right-3 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-labotec-teal px-1 text-[10px] font-bold text-white">
                     {totalItems > 99 ? '99+' : totalItems}
+                  </span>
+                )}
+                {badge === 'notificaciones' && notificacionesNoLeidas > 0 && (
+                  <span className="absolute -right-3 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                    {notificacionesNoLeidas > 99 ? '99+' : notificacionesNoLeidas}
                   </span>
                 )}
               </NavLink>

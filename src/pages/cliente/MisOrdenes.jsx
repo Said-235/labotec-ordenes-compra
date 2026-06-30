@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import ComprobanteUpload from '../../components/ComprobanteUpload'
 import StatusBadge from '../../components/StatusBadge'
@@ -17,6 +18,8 @@ function formatFecha(iso) {
 
 export default function MisOrdenes() {
   const { cliente } = useAuth()
+  const [searchParams] = useSearchParams()
+  const ordenDestacada = searchParams.get('orden')
   const [ordenes, setOrdenes] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -41,6 +44,12 @@ export default function MisOrdenes() {
   useEffect(() => {
     cargarOrdenes()
   }, [cargarOrdenes])
+
+  useEffect(() => {
+    if (ordenDestacada && ordenes.some((o) => o.id === ordenDestacada)) {
+      setExpandedId(ordenDestacada)
+    }
+  }, [ordenDestacada, ordenes])
 
   async function handleDescargarPdf(orden) {
     if (!cliente) return

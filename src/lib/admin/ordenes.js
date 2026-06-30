@@ -1,4 +1,8 @@
 import { assertAdminSession, getSupabaseAdmin } from '../supabaseAdmin'
+import {
+  TIPOS_NOTIFICACION,
+  crearNotificacionComprobante,
+} from './notificaciones'
 import { regenerarPdfOrden } from '../pdfGenerator'
 import { sanitizeText } from '../validation'
 
@@ -84,7 +88,7 @@ export async function validarComprobante(comprobanteId, notasAdmin = '') {
 
   const { data: orden, error: ordenError } = await admin
     .from('ordenes')
-    .select('id, status')
+    .select('id, status, cliente_id, categoria')
     .eq('id', comprobante.orden_id)
     .single()
 
@@ -136,6 +140,15 @@ export async function validarComprobante(comprobanteId, notasAdmin = '') {
     // La orden queda pagada aunque falle la regeneración del PDF
   }
 
+  await crearNotificacionComprobante(admin, {
+    clienteId: orden.cliente_id,
+    ordenId: orden.id,
+    comprobanteId: comprobante.id,
+    categoria: orden.categoria,
+    tipo: TIPOS_NOTIFICACION.comprobante_aprobado,
+    notasAdmin: notas,
+  })
+
   return { ordenId: comprobante.orden_id }
 }
 
@@ -171,7 +184,7 @@ export async function rechazarComprobante(comprobanteId, motivoRechazo) {
 
   const { data: orden, error: ordenError } = await admin
     .from('ordenes')
-    .select('id, status')
+    .select('id, status, cliente_id, categoria')
     .eq('id', comprobante.orden_id)
     .single()
 
@@ -198,6 +211,15 @@ export async function rechazarComprobante(comprobanteId, motivoRechazo) {
   if (updateError) {
     throw new Error('No se pudo rechazar el comprobante')
   }
+
+  await crearNotificacionComprobante(admin, {
+    clienteId: orden.cliente_id,
+    ordenId: orden.id,
+    comprobanteId: comprobante.id,
+    categoria: orden.categoria,
+    tipo: TIPOS_NOTIFICACION.comprobante_rechazado,
+    notasAdmin: motivo,
+  })
 
   return { ordenId: comprobante.orden_id }
 }

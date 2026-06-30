@@ -1,6 +1,7 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { CarritoProvider } from './context/CarritoContext'
+import { NotificacionesProvider } from './context/NotificacionesContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import AdminRoute from './components/AdminRoute'
 import GuestRoute from './components/GuestRoute'
@@ -12,6 +13,7 @@ import DatosFiscales from './pages/DatosFiscales'
 import Catalogo from './pages/cliente/Catalogo'
 import Carrito from './pages/cliente/Carrito'
 import MisOrdenes from './pages/cliente/MisOrdenes'
+import Notificaciones from './pages/cliente/Notificaciones'
 import MiCuenta from './pages/cliente/MiCuenta'
 import Dashboard from './pages/admin/Dashboard'
 import CargaODS from './pages/admin/CargaODS'
@@ -23,8 +25,9 @@ import Productos from './pages/admin/Productos'
 export default function App() {
   return (
     <AuthProvider>
-      <CarritoProvider>
-        <BrowserRouter>
+      <NotificacionesProvider>
+        <CarritoProvider>
+          <BrowserRouter>
           <Routes>
             <Route path="/" element={<RootRedirect />} />
 
@@ -37,6 +40,7 @@ export default function App() {
               <Route element={<ClientLayout />}>
                 <Route path="/catalogo" element={<Catalogo />} />
                 <Route path="/carrito" element={<Carrito />} />
+                <Route path="/notificaciones" element={<Notificaciones />} />
                 <Route path="/mis-ordenes" element={<MisOrdenes />} />
                 <Route path="/mi-cuenta" element={<MiCuenta />} />
               </Route>
@@ -57,6 +61,7 @@ export default function App() {
           </Routes>
         </BrowserRouter>
       </CarritoProvider>
+      </NotificacionesProvider>
     </AuthProvider>
   )
 }
