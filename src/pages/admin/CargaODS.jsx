@@ -83,6 +83,9 @@ export default function CargaODS() {
       setSuccess(msg)
       setTimeout(() => setSuccess(''), 6000)
       setConfirmarEliminar(null)
+      setResultado(null)
+      setArchivo(null)
+      if (fileRef.current) fileRef.current.value = ''
       const data = await obtenerLogCargas()
       setLogs(data)
     } catch (err) {
@@ -131,11 +134,15 @@ export default function CargaODS() {
               id="archivo"
               type="file"
               accept=".ods,.xlsx,.xls"
+              onClick={(event) => {
+                event.target.value = ''
+              }}
               onChange={handleFileChange}
               className="w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-labotec-teal file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-labotec-teal-dark"
             />
             <p className="mt-1 text-xs text-gray-400">
-              Columnas: Codigo, Descripcion, Clase, Costo — opcional: Grupo / GrupoPrueba — máx. 10 MB
+              Columnas: Codigo, Descripcion, Clase, Costo — opcional: Grupo (misma columna que los datos) — máx. 10 MB.
+              El mismo código puede existir en distintas categorías (cada carga lo registra en la categoría seleccionada).
             </p>
           </div>
         </div>
@@ -155,10 +162,18 @@ export default function CargaODS() {
         {resultado && (
           <div className="mt-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-800">
             <p className="font-medium">Carga completada</p>
+            {resultado.advertenciaLog && (
+              <p className="mt-2 rounded bg-amber-100 px-2 py-1 text-xs text-amber-900">
+                {resultado.advertenciaLog}
+              </p>
+            )}
             <ul className="mt-2 space-y-1">
               <li>Filas procesadas: {resultado.totalFilas}</li>
               <li>Insertados: {resultado.insertados}</li>
               <li>Actualizados: {resultado.actualizados}</li>
+              {resultado.reubicados > 0 && (
+                <li>Reubicados de otra categoría: {resultado.reubicados}</li>
+              )}
               <li>Errores: {resultado.errores}</li>
             </ul>
             {resultado.detalleErrores?.length > 0 && (

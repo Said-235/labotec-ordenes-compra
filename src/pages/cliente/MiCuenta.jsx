@@ -3,7 +3,9 @@ import { useAuth } from '../../hooks/useAuth'
 import { getSafeErrorMessage } from '../../lib/errors'
 import { actualizarPerfilCliente } from '../../lib/perfil'
 import { NIVELES_CLIENTE } from '../../lib/constants'
+import { esEnvioIgualFiscal } from '../../lib/datosCliente'
 import { validatePerfilCliente } from '../../lib/validation'
+import DireccionEnvioFields from '../../components/DireccionEnvioFields'
 
 const EMPTY_FORM = {
   nombre: '',
@@ -12,6 +14,8 @@ const EMPTY_FORM = {
   direccion_fiscal: '',
   telefono: '',
   correo_facturacion: '',
+  envio_igual_fiscal: true,
+  direccion_envio: '',
 }
 
 export default function MiCuenta() {
@@ -33,6 +37,8 @@ export default function MiCuenta() {
       direccion_fiscal: fiscal.direccion_fiscal ?? '',
       telefono: fiscal.telefono ?? '',
       correo_facturacion: fiscal.correo_facturacion ?? '',
+      envio_igual_fiscal: esEnvioIgualFiscal(fiscal),
+      direccion_envio: fiscal.direccion_envio ?? '',
     })
   }, [cliente])
 
@@ -40,6 +46,17 @@ export default function MiCuenta() {
     const { name, value } = event.target
     setForm((prev) => ({ ...prev, [name]: value }))
     setFieldErrors((prev) => ({ ...prev, [name]: undefined }))
+    setSuccess('')
+  }
+
+  function handleEnvioIgualChange(event) {
+    const checked = event.target.checked
+    setForm((prev) => ({
+      ...prev,
+      envio_igual_fiscal: checked,
+      direccion_envio: checked ? '' : prev.direccion_envio,
+    }))
+    setFieldErrors((prev) => ({ ...prev, direccion_envio: undefined }))
     setSuccess('')
   }
 
@@ -151,6 +168,13 @@ export default function MiCuenta() {
                   error={fieldErrors[name]}
                 />
               ))}
+
+              <DireccionEnvioFields
+                form={form}
+                fieldErrors={fieldErrors}
+                onEnvioIgualChange={handleEnvioIgualChange}
+                onDireccionEnvioChange={handleChange}
+              />
             </div>
           </section>
 

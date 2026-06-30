@@ -42,12 +42,16 @@ export function validateLoginInput(email, password) {
 
 export function validateDatosFiscales(data) {
   const errors = {}
+  const envioIgualFiscal = data.envio_igual_fiscal !== false && data.envio_igual_fiscal !== 'false'
+
   const sanitized = {
     razon_social: sanitizeText(data.razon_social, 200),
     rfc: normalizeRFC(data.rfc),
     direccion_fiscal: sanitizeText(data.direccion_fiscal, 500),
     telefono: sanitizeText(data.telefono, 20),
     correo_facturacion: sanitizeText(data.correo_facturacion, 254).toLowerCase(),
+    envio_igual_fiscal: envioIgualFiscal,
+    direccion_envio: envioIgualFiscal ? '' : sanitizeText(data.direccion_envio, 500),
   }
 
   if (!sanitized.razon_social) {
@@ -62,6 +66,10 @@ export function validateDatosFiscales(data) {
 
   if (!sanitized.direccion_fiscal) {
     errors.direccion_fiscal = 'La dirección fiscal es requerida'
+  }
+
+  if (!envioIgualFiscal && !sanitized.direccion_envio) {
+    errors.direccion_envio = 'La dirección de envío es requerida'
   }
 
   if (!sanitized.telefono) {

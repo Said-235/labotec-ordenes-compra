@@ -1,5 +1,11 @@
 import * as XLSX from 'xlsx'
 import { CATEGORIA_KEYS, MAX_FILE_SIZE_BYTES } from './constants'
+import {
+  mensajeGrupoPruebaFaltante,
+  normalizeCodigo,
+  requiereGrupoPrueba,
+  resolveGrupoPrueba,
+} from './grupoPrueba'
 import { sanitizeText } from './validation'
 
 const CLASE_MAP = {
@@ -62,6 +68,69 @@ function normalizeClase(value) {
   return CLASE_MAP[key] ?? null
 }
 
+function looksLikeGrupoValue(value) {
+  const text = sanitizeText(value, 100)
+  if (!text) return false
+  if (isHeaderValue(text)) return false
+  if (/^[\d$.,\s]+$/.test(text)) return false
+  return true
+}
+
+/**
+ * Detecta la columna real de Grupo (a veces el encabezado queda desplazado a la derecha).
+ */
+function resolveGrupoColumnIndex(rows, headerIndex, columnMap) {
+  const candidates = new Set()
+
+  if (columnMap.grupo_prueba != null) {
+    candidates.add(columnMap.grupo_prueba)
+    if (columnMap.grupo_prueba > 0) {
+      candidates.add(columnMap.grupo_prueba - 1)
+    }
+  }
+
+  if (columnMap.costo != null) {
+    candidates.add(columnMap.costo + 1)
+  }
+
+  let bestIndex = null
+  let bestScore = 0
+
+  for (const idx of candidates) {
+    let score = 0
+    for (let r = headerIndex + 1; r < Math.min(headerIndex + 8, rows.length); r += 1) {
+      if (looksLikeGrupoValue(rows[r]?.[idx])) score += 1
+    }
+    if (score > bestScore) {
+      bestScore = score
+      bestIndex = idx
+    }
+  }
+
+  return bestScore > 0 ? bestIndex : columnMap.grupo_prueba ?? null
+}
+
+function readGrupoFromRow(row, columnMap) {
+  const indices = new Set()
+
+  if (columnMap.grupo_columna != null) indices.add(columnMap.grupo_columna)
+  if (columnMap.grupo_prueba != null) {
+    indices.add(columnMap.grupo_prueba)
+    if (columnMap.grupo_prueba > 0) indices.add(columnMap.grupo_prueba - 1)
+  }
+
+  const start = columnMap.costo != null ? columnMap.costo + 1 : 0
+  for (let i = start; i < row.length; i += 1) {
+    indices.add(i)
+  }
+
+  for (const idx of [...indices].sort((a, b) => a - b)) {
+    if (looksLikeGrupoValue(row[idx])) return row[idx]
+  }
+
+  return ''
+}
+
 function findHeaderRow(rows) {
   for (let i = 0; i < rows.length; i += 1) {
     const normalized = rows[i].map(normalizeHeader)
@@ -85,6 +154,7 @@ function findHeaderRow(rows) {
         columnMap.clase != null &&
         columnMap.costo != null
       ) {
+        columnMap.grupo_columna = resolveGrupoColumnIndex(rows, i, columnMap)
         return { headerIndex: i, columnMap }
       }
     }
@@ -150,7 +220,7 @@ export async function parseODSFile(file, categoria) {
     const claseRaw = row[columnMap.clase]
     const costoRaw = row[columnMap.costo]
 
-    const codigo = sanitizeText(codigoRaw, 50)
+    const codigo = sanitizeText(normalizeCodigo(codigoRaw), 50)
 
     if (!codigo || isHeaderValue(codigo)) continue
 
@@ -187,8 +257,21 @@ export async function parseODSFile(file, categoria) {
       continue
     }
 
-    const grupoRaw = columnMap.grupo_prueba != null ? row[columnMap.grupo_prueba] : ''
-    const grupo_prueba = sanitizeText(grupoRaw, 100) || null
+    const grupoRaw = readGrupoFromRow(row, columnMap)
+    const grupo_prueba = resolveGrupoPrueba({
+      codigo,
+      clase,
+      grupo_prueba: sanitizeText(grupoRaw, 100) || null,
+    })
+
+    if (requiereGrupoPrueba(clase) && !grupo_prueba) {
+      errors.push({
+        fila: rowNumber,
+        codigo,
+        mensaje: mensajeGrupoPruebaFaltante(codigo, clase),
+      })
+      continue
+    }
 
     validRows.push({
       codigo,

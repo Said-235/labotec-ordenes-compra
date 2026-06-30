@@ -8,6 +8,7 @@ import {
   rechazarComprobante,
 } from '../../lib/admin/ordenes'
 import { CATEGORIAS } from '../../lib/constants'
+import { esEnvioIgualFiscal, getDireccionEnvio } from '../../lib/datosCliente'
 import { getSafeErrorMessage } from '../../lib/errors'
 import { formatMXN } from '../../lib/pricing'
 
@@ -176,10 +177,61 @@ export default function OrdenesAdmin() {
                   <div className="border-t border-gray-100 px-4 pb-4">
                     <p className="mt-3 font-mono text-xs text-gray-400">{orden.id}</p>
 
+                    <div className="mt-4 rounded-lg bg-slate-50 p-4 text-sm">
+                      <p className="font-medium text-gray-800">Datos de contacto y envío</p>
+                      <dl className="mt-2 grid gap-1 text-xs text-gray-600 sm:grid-cols-2">
+                        <div>
+                          <dt className="font-medium text-gray-500">Contacto</dt>
+                          <dd>{orden.clientes?.nombre ?? '—'}</dd>
+                        </div>
+                        <div>
+                          <dt className="font-medium text-gray-500">Correo</dt>
+                          <dd>{orden.clientes?.email ?? '—'}</dd>
+                        </div>
+                        <div>
+                          <dt className="font-medium text-gray-500">Teléfono</dt>
+                          <dd>{orden.clientes?.datos_fiscales?.telefono ?? '—'}</dd>
+                        </div>
+                        <div>
+                          <dt className="font-medium text-gray-500">Correo facturación</dt>
+                          <dd>{orden.clientes?.datos_fiscales?.correo_facturacion ?? '—'}</dd>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <dt className="font-medium text-gray-500">Razón social</dt>
+                          <dd>{orden.clientes?.datos_fiscales?.razon_social ?? '—'}</dd>
+                        </div>
+                        <div>
+                          <dt className="font-medium text-gray-500">RFC</dt>
+                          <dd>{orden.clientes?.datos_fiscales?.rfc ?? '—'}</dd>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <dt className="font-medium text-gray-500">Dirección fiscal</dt>
+                          <dd>{orden.clientes?.datos_fiscales?.direccion_fiscal ?? '—'}</dd>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <dt className="font-medium text-gray-500">Dirección de envío</dt>
+                          <dd>
+                            {getDireccionEnvio(orden.clientes?.datos_fiscales) || '—'}
+                          </dd>
+                          {esEnvioIgualFiscal(orden.clientes?.datos_fiscales) && (
+                            <p className="mt-0.5 text-xs text-gray-400">
+                              Igual a la dirección fiscal
+                            </p>
+                          )}
+                        </div>
+                      </dl>
+                    </div>
+
+                    {orden.payment_confirmed_at && (
+                      <p className="mt-2 text-xs text-green-700">
+                        Pago confirmado: {formatFecha(orden.payment_confirmed_at)}
+                      </p>
+                    )}
+
                     <button
                       type="button"
                       onClick={() => handleVerPdf(orden)}
-                      className="mt-2 text-sm text-labotec-teal hover:underline"
+                      className="mt-3 text-sm text-labotec-teal hover:underline"
                     >
                       Ver PDF de orden
                     </button>

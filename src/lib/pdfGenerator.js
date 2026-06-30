@@ -1,6 +1,8 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import { CATEGORIAS } from './constants'
+import { CATEGORIAS, ORDER_STATUS, SIGNED_URL_EXPIRY } from './constants'
+import { esEnvioIgualFiscal, getDireccionEnvio } from './datosCliente'
+import { getOrdenPdfPath } from './ordenes'
 import { formatMXN } from './pricing'
 
 function formatFecha(date = new Date()) {
@@ -10,6 +12,24 @@ function formatFecha(date = new Date()) {
   }).format(date)
 }
 
+function addLines(doc, lines, x, startY, lineHeight = 5) {
+  let y = startY
+  for (const line of lines) {
+    if (line) {
+      doc.text(line, x, y)
+      y += lineHeight
+    }
+  }
+  return y
+}
+
+function addWrappedLine(doc, label, value, x, y, maxWidth = 180) {
+  const text = `${label}: ${value || '—'}`
+  const wrapped = doc.splitTextToSize(text, maxWidth)
+  doc.text(wrapped, x, y)
+  return y + wrapped.length * 5
+}
+
 /**
  * Genera el PDF de una orden de compra.
  * @returns {Blob}
@@ -17,6 +37,7 @@ function formatFecha(date = new Date()) {
 export function generateOrdenPDF({ orden, detalles, cliente }) {
   const doc = new jsPDF()
   const fiscal = cliente.datos_fiscales ?? {}
+  const statusLabel = ORDER_STATUS[orden.status] ?? orden.status
 
   doc.setFontSize(18)
   doc.setTextColor(0, 137, 123)
@@ -24,18 +45,60 @@ export function generateOrdenPDF({ orden, detalles, cliente }) {
 
   doc.setFontSize(10)
   doc.setTextColor(60, 60, 60)
-  doc.text(`Categoría: ${CATEGORIAS[orden.categoria] ?? orden.categoria}`, 14, 30)
-  doc.text(`Número de orden: ${orden.id}`, 14, 36)
-  doc.text(`Fecha: ${formatFecha(new Date(orden.creado_en ?? Date.now()))}`, 14, 42)
-  doc.text(`Estado: ${orden.status}`, 14, 48)
+  let y = addLines(
+    doc,
+    [
+      `Categoría: ${CATEGORIAS[orden.categoria] ?? orden.categoria}`,
+      `Número de orden: ${orden.id}`,
+      `Fecha de orden: ${formatFecha(new Date(orden.creado_en ?? Date.now()))}`,
+      `Estado: ${statusLabel}`,
+      orden.payment_confirmed_at
+        ? `Pago confirmado: ${formatFecha(new Date(orden.payment_confirmed_at))}`
+        : null,
+    ],
+    14,
+    30,
+  )
 
+  y += 4
   doc.setFontSize(11)
   doc.setTextColor(0, 0, 0)
-  doc.text('Datos fiscales', 14, 58)
+  doc.text('Datos de contacto', 14, y)
   doc.setFontSize(9)
-  doc.text(`Razón social: ${fiscal.razon_social ?? '—'}`, 14, 65)
-  doc.text(`RFC: ${fiscal.rfc ?? '—'}`, 14, 71)
-  doc.text(`Dirección: ${fiscal.direccion_fiscal ?? '—'}`, 14, 77)
+  y = addLines(
+    doc,
+    [
+      `Nombre: ${cliente.nombre ?? '—'}`,
+      `Correo: ${cliente.email ?? '—'}`,
+      `Teléfono: ${fiscal.telefono ?? '—'}`,
+    ],
+    14,
+    y + 7,
+  )
+
+  y += 4
+  doc.setFontSize(11)
+  doc.text('Datos fiscales', 14, y)
+  doc.setFontSize(9)
+  y += 7
+  y = addWrappedLine(doc, 'Razón social', fiscal.razon_social, 14, y)
+  y = addWrappedLine(doc, 'RFC', fiscal.rfc, 14, y)
+  y = addWrappedLine(doc, 'Dirección fiscal', fiscal.direccion_fiscal, 14, y)
+  y = addWrappedLine(doc, 'Correo de facturación', fiscal.correo_facturacion, 14, y)
+
+  y += 4
+  doc.setFontSize(11)
+  doc.text('Datos de envío', 14, y)
+  doc.setFontSize(9)
+  y += 7
+  if (esEnvioIgualFiscal(fiscal)) {
+    y = addWrappedLine(doc, 'Dirección de envío', fiscal.direccion_fiscal, 14, y)
+    doc.setTextColor(100, 100, 100)
+    y = addWrappedLine(doc, 'Nota', 'Igual a la dirección fiscal', 14, y)
+    doc.setTextColor(0, 0, 0)
+  } else {
+    y = addWrappedLine(doc, 'Dirección de envío', getDireccionEnvio(fiscal), 14, y)
+  }
 
   const tableBody = detalles.map((d) => [
     d.codigo,
@@ -47,7 +110,7 @@ export function generateOrdenPDF({ orden, detalles, cliente }) {
   ])
 
   autoTable(doc, {
-    startY: 85,
+    startY: y + 4,
     head: [['Código', 'Descripción', 'Clase', 'Cant.', 'P. Unit.', 'Subtotal']],
     body: tableBody,
     styles: { fontSize: 8, cellPadding: 2 },
@@ -80,10 +143,8 @@ export function generateOrdenPDF({ orden, detalles, cliente }) {
   return doc.output('blob')
 }
 
-const SIGNED_URL_EXPIRY = 60 * 60 * 24 * 7 // 7 días
-
 /**
- * Genera PDF, lo sube a Storage y retorna URL firmada.
+ * Genera PDF, reemplaza el archivo anterior en Storage y retorna URL firmada.
  */
 export async function generateAndUploadOrdenPDF({
   orden,
@@ -92,8 +153,10 @@ export async function generateAndUploadOrdenPDF({
   supabaseClient,
 }) {
   const blob = generateOrdenPDF({ orden, detalles, cliente })
-  const fileName = `orden_${orden.categoria}.pdf`
-  const path = `${cliente.id}/${orden.id}/${fileName}`
+  const path = getOrdenPdfPath(cliente.id, orden.id, orden.categoria)
+
+  await supabaseClient.storage.from('documentos').remove([path])
+  // Ignorar si el archivo aún no existía (primera generación)
 
   const { error: uploadError } = await supabaseClient.storage
     .from('documentos')
@@ -118,6 +181,80 @@ export async function generateAndUploadOrdenPDF({
     path,
     signedUrl: signedData.signedUrl,
   }
+}
+
+/**
+ * Regenera el PDF de una orden con su estado y datos actuales.
+ */
+export async function regenerarPdfOrden(ordenId, supabaseClient) {
+  const { data: orden, error: ordenError } = await supabaseClient
+    .from('ordenes')
+    .select(`
+      id,
+      categoria,
+      status,
+      subtotal,
+      total,
+      descuento_aplicado,
+      creado_en,
+      payment_confirmed_at,
+      clientes (
+        id,
+        nombre,
+        email,
+        datos_fiscales
+      ),
+      detalle_orden (
+        cantidad,
+        precio_unitario,
+        subtotal,
+        productos (
+          codigo,
+          descripcion,
+          clase
+        )
+      )
+    `)
+    .eq('id', ordenId)
+    .single()
+
+  if (ordenError || !orden?.clientes) {
+    throw new Error('No se pudo cargar la orden para regenerar el PDF')
+  }
+
+  const cliente = {
+    id: orden.clientes.id,
+    nombre: orden.clientes.nombre,
+    email: orden.clientes.email,
+    datos_fiscales: orden.clientes.datos_fiscales,
+  }
+
+  const detalles = (orden.detalle_orden ?? []).map((d) => ({
+    codigo: d.productos?.codigo ?? '—',
+    descripcion: d.productos?.descripcion ?? '—',
+    clase: d.productos?.clase ?? '—',
+    cantidad: d.cantidad,
+    precio_unitario: d.precio_unitario,
+    subtotal: d.subtotal,
+  }))
+
+  const { signedUrl } = await generateAndUploadOrdenPDF({
+    orden,
+    detalles,
+    cliente,
+    supabaseClient,
+  })
+
+  const { error: updateError } = await supabaseClient
+    .from('ordenes')
+    .update({ pdf_url: signedUrl })
+    .eq('id', ordenId)
+
+  if (updateError) {
+    throw new Error('No se pudo actualizar la URL del PDF')
+  }
+
+  return { signedUrl }
 }
 
 /**

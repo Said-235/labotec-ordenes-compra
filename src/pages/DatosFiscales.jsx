@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { getSafeErrorMessage } from '../lib/errors'
 import { validateDatosFiscales } from '../lib/validation'
+import DireccionEnvioFields from '../components/DireccionEnvioFields'
 
 export default function DatosFiscales() {
   const { completeDatosFiscales, needsDatosFiscales, isAdmin, loading } = useAuth()
@@ -13,6 +14,8 @@ export default function DatosFiscales() {
     direccion_fiscal: '',
     telefono: '',
     correo_facturacion: '',
+    envio_igual_fiscal: true,
+    direccion_envio: '',
   })
   const [fieldErrors, setFieldErrors] = useState({})
   const [submitError, setSubmitError] = useState('')
@@ -30,6 +33,16 @@ export default function DatosFiscales() {
     const { name, value } = event.target
     setForm((prev) => ({ ...prev, [name]: value }))
     setFieldErrors((prev) => ({ ...prev, [name]: undefined }))
+  }
+
+  function handleEnvioIgualChange(event) {
+    const checked = event.target.checked
+    setForm((prev) => ({
+      ...prev,
+      envio_igual_fiscal: checked,
+      direccion_envio: checked ? '' : prev.direccion_envio,
+    }))
+    setFieldErrors((prev) => ({ ...prev, direccion_envio: undefined }))
   }
 
   async function handleSubmit(event) {
@@ -62,6 +75,9 @@ export default function DatosFiscales() {
     { name: 'correo_facturacion', label: 'Correo de facturación', type: 'email' },
   ]
 
+  const fieldsBeforeEnvio = fields.slice(0, 3)
+  const fieldsAfterEnvio = fields.slice(3)
+
   return (
     <div className="flex min-h-screen items-center justify-center px-4 py-10">
       <div className="w-full max-w-lg">
@@ -81,7 +97,36 @@ export default function DatosFiscales() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-            {fields.map(({ name, label, type, placeholder }) => (
+            {fieldsBeforeEnvio.map(({ name, label, type, placeholder }) => (
+              <div key={name}>
+                <label htmlFor={name} className="mb-1 block text-sm font-medium text-gray-700">
+                  {label}
+                </label>
+                <input
+                  id={name}
+                  name={name}
+                  type={type}
+                  value={form[name]}
+                  onChange={handleChange}
+                  placeholder={placeholder}
+                  className={`w-full rounded-lg border px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-labotec-teal/30 ${
+                    fieldErrors[name] ? 'border-red-400' : 'border-gray-300 focus:border-labotec-teal'
+                  }`}
+                />
+                {fieldErrors[name] && (
+                  <p className="mt-1 text-xs text-red-600">{fieldErrors[name]}</p>
+                )}
+              </div>
+            ))}
+
+            <DireccionEnvioFields
+              form={form}
+              fieldErrors={fieldErrors}
+              onEnvioIgualChange={handleEnvioIgualChange}
+              onDireccionEnvioChange={handleChange}
+            />
+
+            {fieldsAfterEnvio.map(({ name, label, type, placeholder }) => (
               <div key={name}>
                 <label htmlFor={name} className="mb-1 block text-sm font-medium text-gray-700">
                   {label}

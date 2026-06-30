@@ -1,4 +1,5 @@
 import { assertAdminSession, getSupabaseAdmin } from '../supabaseAdmin'
+import { regenerarPdfOrden } from '../pdfGenerator'
 import { sanitizeText } from '../validation'
 
 /**
@@ -24,7 +25,8 @@ export async function obtenerTodasOrdenes({ status } = {}) {
       clientes (
         id,
         nombre,
-        email
+        email,
+        datos_fiscales
       ),
       comprobantes (
         id,
@@ -126,6 +128,12 @@ export async function validarComprobante(comprobanteId, notasAdmin = '') {
       .update({ validado: false, validado_por: null, validado_en: null })
       .eq('id', comprobanteId)
     throw new Error('No se pudo marcar la orden como pagada')
+  }
+
+  try {
+    await regenerarPdfOrden(comprobante.orden_id, admin)
+  } catch {
+    // La orden queda pagada aunque falle la regeneración del PDF
   }
 
   return { ordenId: comprobante.orden_id }

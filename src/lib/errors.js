@@ -53,6 +53,20 @@ export function getSafeErrorMessage(error, fallback = 'Ocurrió un error inesper
     'No puede cancelar esta orden',
     'No se pudo cancelar la orden',
     'No se pudo verificar el comprobante de pago',
+    'La dirección de envío es requerida',
+    'No se pudo procesar ningún producto',
+    'El archivo no contiene filas válidas',
+    'Los productos se cargaron correctamente',
+    'ejecute en Supabase',
+    'Conflicto al insertar producto',
+    'No se pudo procesar ningún producto',
+    'Está en "',
+    'No se pudo mover',
+    'aparece en órdenes',
+    'Calibrador/Control requieren grupo de prueba',
+    'Reactivo, Calibrador y Control requieren grupo de prueba',
+    'columna Grupo en ODS',
+    'columna Grupo o prefijo',
   ]
 
   const message = error.message || String(error)

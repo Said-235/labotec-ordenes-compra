@@ -1,6 +1,6 @@
 import { assertAdminSession, getSupabaseAdmin } from '../supabaseAdmin'
 
-async function productoEnOrdenes(admin, productoId) {
+export async function productoEnOrdenes(admin, productoId) {
   const { count, error } = await admin
     .from('detalle_orden')
     .select('id', { count: 'exact', head: true })
