@@ -1,5 +1,8 @@
 import { assertAdminSession, getSupabaseAdmin } from '../supabaseAdmin'
 import { isValidEmail, sanitizeText } from '../validation'
+import {
+  ERRORES_ADMIN_PRINCIPAL,
+} from './adminPrincipal'
 
 function validateNivel(nivel) {
   const n = Number(nivel)
@@ -83,6 +86,20 @@ export async function actualizarCliente(clienteId, { nombre, nivel }) {
   await assertAdminSession()
   const admin = getSupabaseAdmin()
 
+  const { data: perfil, error: lookupError } = await admin
+    .from('clientes')
+    .select('id, es_admin')
+    .eq('id', clienteId)
+    .single()
+
+  if (lookupError || !perfil) {
+    throw new Error('Cliente no encontrado')
+  }
+
+  if (perfil.es_admin) {
+    throw new Error(ERRORES_ADMIN_PRINCIPAL.esAdmin)
+  }
+
   const updates = {}
 
   if (nombre != null) {
@@ -115,6 +132,20 @@ export async function desactivarCliente(clienteId) {
   await assertAdminSession()
   const admin = getSupabaseAdmin()
 
+  const { data: perfil, error: lookupError } = await admin
+    .from('clientes')
+    .select('id, es_admin')
+    .eq('id', clienteId)
+    .single()
+
+  if (lookupError || !perfil) {
+    throw new Error('Cliente no encontrado')
+  }
+
+  if (perfil.es_admin) {
+    throw new Error(ERRORES_ADMIN_PRINCIPAL.esAdmin)
+  }
+
   const { error } = await admin
     .from('clientes')
     .update({ activo: false })
@@ -131,6 +162,20 @@ export async function reactivarCliente(clienteId) {
   await assertAdminSession()
   const admin = getSupabaseAdmin()
 
+  const { data: perfil, error: lookupError } = await admin
+    .from('clientes')
+    .select('id, es_admin')
+    .eq('id', clienteId)
+    .single()
+
+  if (lookupError || !perfil) {
+    throw new Error('Cliente no encontrado')
+  }
+
+  if (perfil.es_admin) {
+    throw new Error(ERRORES_ADMIN_PRINCIPAL.esAdmin)
+  }
+
   const { error } = await admin
     .from('clientes')
     .update({ activo: true })
@@ -146,6 +191,20 @@ export async function reactivarCliente(clienteId) {
 export async function restablecerPasswordCliente(clienteId, password) {
   await assertAdminSession()
   const admin = getSupabaseAdmin()
+
+  const { data: perfil, error: lookupError } = await admin
+    .from('clientes')
+    .select('id, es_admin')
+    .eq('id', clienteId)
+    .single()
+
+  if (lookupError || !perfil) {
+    throw new Error('Cliente no encontrado')
+  }
+
+  if (perfil.es_admin) {
+    throw new Error(ERRORES_ADMIN_PRINCIPAL.esAdmin)
+  }
 
   const cleanPassword = validatePassword(password)
 

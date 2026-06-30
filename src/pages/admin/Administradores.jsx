@@ -8,6 +8,11 @@ import {
   reactivarAdministrador,
   restablecerPasswordAdministrador,
 } from '../../lib/admin/administradores'
+import {
+  puedeDesactivarAdmin,
+  puedeEditarNombreAdmin,
+  puedeRestablecerPasswordAdmin,
+} from '../../lib/admin/adminPrincipal'
 import { getSafeErrorMessage } from '../../lib/errors'
 
 function Modal({ open, onClose, title, children }) {
@@ -150,8 +155,15 @@ export default function Administradores() {
       )}
 
       <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-        Los administradores pueden validar comprobantes, gestionar clientes, productos y cargas ODS.
-        Use contraseñas seguras (mín. 12 caracteres con mayúsculas, minúsculas y números).
+        <p className="font-medium">Administrador principal</p>
+        <ul className="mt-2 list-inside list-disc space-y-1 text-amber-800">
+          <li>Solo él puede cambiar su propia contraseña.</li>
+          <li>Ningún otro admin puede modificar su nombre, contraseña ni desactivarlo.</li>
+          <li>Los demás administradores sí pueden ser gestionados con normalidad.</li>
+        </ul>
+        <p className="mt-2 text-amber-800">
+          Use contraseñas seguras (mín. 12 caracteres con mayúsculas, minúsculas y números).
+        </p>
       </div>
 
       {loading ? (
@@ -179,21 +191,42 @@ export default function Administradores() {
               ) : (
                 admins.map((admin) => {
                   const esYo = admin.id === cliente?.id
+                  const esPrincipal = Boolean(admin.admin_principal)
+                  const puedeCambiarPassword = puedeRestablecerPasswordAdmin(cliente?.id, admin)
+                  const puedeEditarNombre = puedeEditarNombreAdmin(cliente?.id, admin)
+                  const puedeDesactivar = !esYo && puedeDesactivarAdmin(admin)
                   return (
-                    <tr key={admin.id} className={!admin.activo ? 'bg-gray-50 opacity-70' : ''}>
+                    <tr
+                      key={admin.id}
+                      className={!admin.activo ? 'bg-gray-50 opacity-70' : esPrincipal ? 'bg-amber-50/40' : ''}
+                    >
                       <td className="px-4 py-3">
-                        <input
-                          type="text"
-                          defaultValue={admin.nombre}
-                          onBlur={(e) => {
-                            if (e.target.value.trim() !== admin.nombre) {
-                              handleCambioNombre(admin, e.target.value.trim())
-                            }
-                          }}
-                          className="w-full min-w-[140px] rounded border border-transparent px-1 py-0.5 text-sm hover:border-gray-200 focus:border-labotec-teal focus:outline-none"
-                        />
+                        {puedeEditarNombre ? (
+                          <input
+                            type="text"
+                            defaultValue={admin.nombre}
+                            onBlur={(e) => {
+                              if (e.target.value.trim() !== admin.nombre) {
+                                handleCambioNombre(admin, e.target.value.trim())
+                              }
+                            }}
+                            className="w-full min-w-[140px] rounded border border-transparent px-1 py-0.5 text-sm hover:border-gray-200 focus:border-labotec-teal focus:outline-none"
+                          />
+                        ) : (
+                          <span className="block px-1 py-0.5 text-sm font-medium text-gray-900">
+                            {admin.nombre}
+                          </span>
+                        )}
                         {esYo && (
                           <span className="mt-1 block text-xs text-labotec-teal">Su cuenta</span>
+                        )}
+                        {esPrincipal && (
+                          <span className="mt-1 block text-xs font-medium text-amber-700">
+                            Administrador principal
+                          </span>
+                        )}
+                        {!puedeEditarNombre && !esYo && esPrincipal && (
+                          <span className="mt-1 block text-xs text-gray-400">Nombre protegido</span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-gray-600">{admin.email}</td>
@@ -210,14 +243,23 @@ export default function Administradores() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setModalPassword(admin)}
-                            className="text-xs text-labotec-teal hover:underline"
-                          >
-                            Contraseña
-                          </button>
-                          {!esYo && (
+                          {puedeCambiarPassword ? (
+                            <button
+                              type="button"
+                              onClick={() => setModalPassword(admin)}
+                              className="text-xs text-labotec-teal hover:underline"
+                            >
+                              Contraseña
+                            </button>
+                          ) : (
+                            <span
+                              className="text-xs text-gray-400"
+                              title="Solo el administrador principal puede cambiar su contraseña"
+                            >
+                              Contraseña protegida
+                            </span>
+                          )}
+                          {puedeDesactivar ? (
                             <button
                               type="button"
                               onClick={() => handleToggleActivo(admin)}
@@ -227,6 +269,16 @@ export default function Administradores() {
                             >
                               {admin.activo ? 'Desactivar' : 'Reactivar'}
                             </button>
+                          ) : (
+                            !esYo &&
+                            esPrincipal && (
+                              <span
+                                className="text-xs text-gray-400"
+                                title="El administrador principal no puede desactivarse"
+                              >
+                                Cuenta protegida
+                              </span>
+                            )
                           )}
                         </div>
                       </td>

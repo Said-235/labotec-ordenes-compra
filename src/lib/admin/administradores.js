@@ -1,5 +1,11 @@
 import { assertAdminSession, getSupabaseAdmin } from '../supabaseAdmin'
 import { isValidEmail, sanitizeText } from '../validation'
+import {
+  assertPuedeDesactivarAdmin,
+  assertPuedeEditarAdmin,
+  assertPuedeRestablecerPasswordAdmin,
+  obtenerIdAdminPrincipal,
+} from './adminPrincipal'
 
 function validatePassword(password) {
   const pwd = String(password ?? '')
@@ -21,8 +27,9 @@ export async function listarAdministradores() {
 
   const { data, error } = await admin
     .from('clientes')
-    .select('id, nombre, email, activo, creado_en')
+    .select('id, nombre, email, activo, creado_en, admin_principal')
     .eq('es_admin', true)
+    .order('admin_principal', { ascending: false })
     .order('nombre')
 
   if (error) throw new Error('No se pudieron cargar los administradores')
@@ -61,6 +68,7 @@ export async function crearAdministrador({ nombre, email, password }) {
     nombre: cleanNombre,
     email: cleanEmail,
     es_admin: true,
+    admin_principal: false,
     nivel: 1,
     primer_login: false,
     activo: true,
@@ -75,7 +83,7 @@ export async function crearAdministrador({ nombre, email, password }) {
 }
 
 /**
- * Desactiva un administrador (no puede desactivarse a sí mismo).
+ * Desactiva un administrador (no puede desactivarse a sí mismo ni al principal).
  */
 export async function desactivarAdministrador(adminId, adminActualId) {
   await assertAdminSession()
@@ -85,6 +93,8 @@ export async function desactivarAdministrador(adminId, adminActualId) {
   }
 
   const admin = getSupabaseAdmin()
+  const adminPrincipalId = await obtenerIdAdminPrincipal(admin)
+  assertPuedeDesactivarAdmin(adminId, adminPrincipalId)
 
   const { data: activos, error: countError } = await admin
     .from('clientes')
@@ -103,12 +113,13 @@ export async function desactivarAdministrador(adminId, adminActualId) {
     .update({ activo: false })
     .eq('id', adminId)
     .eq('es_admin', true)
+    .eq('admin_principal', false)
 
   if (error) throw new Error('No se pudo desactivar el administrador')
 }
 
 /**
- * Reactiva un administrador desactivado.
+ * Reactiva un administrador desactivado (excepto el principal, que no puede desactivarse).
  */
 export async function reactivarAdministrador(adminId) {
   await assertAdminSession()
@@ -127,7 +138,7 @@ export async function reactivarAdministrador(adminId) {
  * Restablece contraseña de un administrador.
  */
 export async function restablecerPasswordAdministrador(adminId, password) {
-  await assertAdminSession()
+  const { user: adminActual } = await assertAdminSession()
   const admin = getSupabaseAdmin()
 
   const { data: perfil } = await admin
@@ -138,6 +149,9 @@ export async function restablecerPasswordAdministrador(adminId, password) {
     .single()
 
   if (!perfil) throw new Error('Administrador no encontrado')
+
+  const adminPrincipalId = await obtenerIdAdminPrincipal(admin)
+  assertPuedeRestablecerPasswordAdmin(adminActual.id, adminId, adminPrincipalId)
 
   const cleanPassword = validatePassword(password)
 
@@ -152,8 +166,11 @@ export async function restablecerPasswordAdministrador(adminId, password) {
  * Actualiza nombre de un administrador.
  */
 export async function actualizarAdministrador(adminId, { nombre }) {
-  await assertAdminSession()
+  const { user: adminActual } = await assertAdminSession()
   const admin = getSupabaseAdmin()
+
+  const adminPrincipalId = await obtenerIdAdminPrincipal(admin)
+  assertPuedeEditarAdmin(adminActual.id, adminId, adminPrincipalId)
 
   const cleanNombre = sanitizeText(nombre, 200)
   if (!cleanNombre) throw new Error('El nombre es requerido')
