@@ -3,7 +3,6 @@ import {
   TIPOS_NOTIFICACION,
   crearNotificacionComprobante,
 } from './notificaciones'
-import { regenerarPdfOrden } from '../pdfGenerator'
 import { sanitizeText } from '../validation'
 
 /**
@@ -135,6 +134,7 @@ export async function validarComprobante(comprobanteId, notasAdmin = '') {
   }
 
   try {
+    const { regenerarPdfOrden } = await import('../pdfGenerator')
     await regenerarPdfOrden(comprobante.orden_id, admin)
   } catch {
     // La orden queda pagada aunque falle la regeneración del PDF

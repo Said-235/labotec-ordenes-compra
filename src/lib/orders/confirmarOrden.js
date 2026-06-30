@@ -5,7 +5,6 @@ import {
   validarRestriccionReactivo,
 } from '../cartValidation'
 import { calcularPrecioUnitario } from '../pricing'
-import { generateAndUploadOrdenPDF } from '../pdfGenerator'
 
 function sanitizeCantidad(cantidad) {
   const qty = Math.floor(Number(cantidad) || 0)
@@ -184,6 +183,7 @@ export async function confirmarOrden(cartItems) {
     }))
 
     try {
+      const { generateAndUploadOrdenPDF } = await import('../pdfGenerator')
       const { signedUrl } = await generateAndUploadOrdenPDF({
         orden,
         detalles: detallesPdf,
