@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import ComprobanteUpload from '../../components/ComprobanteUpload'
 import StatusBadge from '../../components/StatusBadge'
@@ -27,6 +27,7 @@ export default function MisOrdenes() {
   const [filtroStatus, setFiltroStatus] = useState('')
   const [confirmarCancelar, setConfirmarCancelar] = useState(null)
   const [cancelando, setCancelando] = useState(false)
+  const [mostrarExitoComprobante, setMostrarExitoComprobante] = useState(false)
 
   const cargarOrdenes = useCallback(async () => {
     setLoading(true)
@@ -50,6 +51,11 @@ export default function MisOrdenes() {
       setExpandedId(ordenDestacada)
     }
   }, [ordenDestacada, ordenes])
+
+  async function handleComprobanteSubido() {
+    setMostrarExitoComprobante(true)
+    await cargarOrdenes()
+  }
 
   async function handleDescargarPdf(orden) {
     if (!cliente) return
@@ -238,7 +244,7 @@ export default function MisOrdenes() {
                     <ComprobanteUpload
                       ordenId={orden.id}
                       disabled={!puedeSubirComprobante}
-                      onSuccess={cargarOrdenes}
+                      onSuccess={handleComprobanteSubido}
                     />
 
                     {orden.detalle_orden?.length > 0 && (
@@ -272,6 +278,42 @@ export default function MisOrdenes() {
               </article>
             )
           })}
+        </div>
+      )}
+
+      {mostrarExitoComprobante && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div
+            className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
+            role="dialog"
+            aria-labelledby="comprobante-exito-titulo"
+          >
+            <h2 id="comprobante-exito-titulo" className="text-lg font-semibold text-gray-900">
+              Comprobante recibido
+            </h2>
+            <p className="mt-3 text-sm text-gray-600">
+              Su comprobante de pago fue enviado correctamente. Su orden está siendo revisada por
+              administración.
+            </p>
+            <p className="mt-2 text-sm text-gray-600">
+              Esté al tanto de sus{' '}
+              <Link
+                to="/notificaciones"
+                className="font-medium text-labotec-teal hover:underline"
+                onClick={() => setMostrarExitoComprobante(false)}
+              >
+                notificaciones
+              </Link>
+              : le avisaremos cuando su pago sea aprobado o si necesitamos un comprobante corregido.
+            </p>
+            <button
+              type="button"
+              onClick={() => setMostrarExitoComprobante(false)}
+              className="mt-6 w-full rounded-lg bg-labotec-teal py-2.5 text-sm font-semibold text-white hover:bg-labotec-teal-dark"
+            >
+              Entendido
+            </button>
+          </div>
         </div>
       )}
 

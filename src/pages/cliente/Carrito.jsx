@@ -74,6 +74,12 @@ export default function Carrito() {
           <p className="mt-2 text-sm text-green-800">
             Se generaron {ordenesCreadas.length} orden(es), una por categoría.
           </p>
+          <p className="mt-3 text-sm text-green-900">
+            Para completar el pago, diríjase a{' '}
+            <span className="font-medium">Mis órdenes</span> y cargue su comprobante de pago
+            (PDF, JPG o PNG). Recibirá un aviso en{' '}
+            <span className="font-medium">Notificaciones</span> cuando administración lo revise.
+          </p>
 
           <ul className="mt-4 space-y-3">
             {ordenesCreadas.map((orden) => (
