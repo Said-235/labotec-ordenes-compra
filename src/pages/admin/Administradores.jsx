@@ -52,7 +52,7 @@ export default function Administradores() {
       const data = await listarAdministradores()
       setAdmins(data)
     } catch (err) {
-      setError(getSafeErrorMessage(err, 'Error al cargar administradores'))
+      setError(getSafeErrorMessage(err, 'No se pudieron cargar los administradores'))
     } finally {
       setLoading(false)
     }

@@ -7,7 +7,12 @@ const cards = [
   {
     to: '/admin/clientes',
     title: 'Clientes',
-    description: 'Crear cuentas, asignar nivel y configurar descuentos',
+    description: 'Crear cuentas y asignar el descuento de cada cliente',
+  },
+  {
+    to: '/admin/categorias',
+    title: 'Categorías',
+    description: 'Agregar y administrar categorías de productos',
   },
   {
     to: '/admin/administradores',

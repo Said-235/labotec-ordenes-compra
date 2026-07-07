@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { CATEGORIAS, CATEGORIA_KEYS } from '../../lib/constants'
+import { useCategorias } from '../../hooks/useCategorias'
 import { getSafeErrorMessage } from '../../lib/errors'
 import { procesarCargaODS, obtenerLogCargas, eliminarProductosPorCarga } from '../../lib/admin/cargaOds'
 
@@ -11,8 +11,9 @@ function formatFecha(iso) {
 }
 
 export default function CargaODS() {
+  const { categoriaKeys, categoriaMap, getNombreCategoria } = useCategorias()
   const fileRef = useRef(null)
-  const [categoria, setCategoria] = useState(CATEGORIA_KEYS[0])
+  const [categoria, setCategoria] = useState('')
   const [archivo, setArchivo] = useState(null)
   const [procesando, setProcesando] = useState(false)
   const [error, setError] = useState('')
@@ -22,6 +23,12 @@ export default function CargaODS() {
   const [confirmarEliminar, setConfirmarEliminar] = useState(null)
   const [eliminando, setEliminando] = useState(false)
   const [success, setSuccess] = useState('')
+
+  useEffect(() => {
+    if (categoriaKeys.length && !categoriaKeys.includes(categoria)) {
+      setCategoria(categoriaKeys[0])
+    }
+  }, [categoriaKeys, categoria])
 
   useEffect(() => {
     async function cargarLogs() {
@@ -52,6 +59,11 @@ export default function CargaODS() {
 
     if (!archivo) {
       setError('Seleccione un archivo ODS o XLSX')
+      return
+    }
+
+    if (!categoria) {
+      setError('Seleccione una categoría')
       return
     }
 
@@ -117,9 +129,9 @@ export default function CargaODS() {
               onChange={(e) => setCategoria(e.target.value)}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-labotec-teal focus:outline-none focus:ring-2 focus:ring-labotec-teal/30"
             >
-              {CATEGORIA_KEYS.map((key) => (
+              {categoriaKeys.map((key) => (
                 <option key={key} value={key}>
-                  {CATEGORIAS[key]}
+                  {categoriaMap[key]}
                 </option>
               ))}
             </select>
@@ -193,7 +205,7 @@ export default function CargaODS() {
 
         <button
           type="submit"
-          disabled={procesando || !archivo}
+          disabled={procesando || !archivo || !categoria}
           className="mt-5 rounded-lg bg-labotec-teal px-5 py-2.5 text-sm font-semibold text-white hover:bg-labotec-teal-dark disabled:cursor-not-allowed disabled:opacity-60"
         >
           {procesando ? 'Procesando…' : 'Procesar archivo'}
@@ -229,7 +241,7 @@ export default function CargaODS() {
                   return (
                   <tr key={log.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 whitespace-nowrap">{formatFecha(log.creado_en)}</td>
-                    <td className="px-4 py-3">{CATEGORIAS[log.categoria] ?? log.categoria}</td>
+                    <td className="px-4 py-3">{getNombreCategoria(log.categoria)}</td>
                     <td className="px-4 py-3 max-w-[200px] truncate">{log.nombre_archivo}</td>
                     <td className="px-4 py-3">{log.total_filas}</td>
                     <td className="px-4 py-3 text-green-700">{log.insertados}</td>

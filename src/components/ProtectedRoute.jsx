@@ -17,7 +17,7 @@ export default function ProtectedRoute() {
     return <Navigate to="/login" replace state={{ from: location }} />
   }
 
-  if (needsDatosFiscales && location.pathname !== '/datos-fiscales') {
+  if (needsDatosFiscales && !['/datos-fiscales', '/condiciones-comerciales'].includes(location.pathname)) {
     return <Navigate to="/datos-fiscales" replace />
   }
 

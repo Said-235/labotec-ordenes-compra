@@ -1,9 +1,10 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import { CATEGORIAS, ORDER_STATUS, SIGNED_URL_EXPIRY } from './constants'
+import { fetchCategoriasDesdeBd, mapCategorias, nombreCategoria } from './categorias'
+import { ORDER_STATUS, SIGNED_URL_EXPIRY } from './constants'
 import { esEnvioIgualFiscal, getDireccionEnvio } from './datosCliente'
 import { getOrdenPdfPath } from './ordenes'
-import { formatMXN } from './pricing'
+import { formatMXN, getTotalesOrdenDesglose, esPrecioDobleSinReactivo, precioHabitualLinea } from './pricing'
 
 function formatFecha(date = new Date()) {
   return new Intl.DateTimeFormat('es-MX', {
@@ -34,7 +35,7 @@ function addWrappedLine(doc, label, value, x, y, maxWidth = 180) {
  * Genera el PDF de una orden de compra.
  * @returns {Blob}
  */
-export function generateOrdenPDF({ orden, detalles, cliente }) {
+export function generateOrdenPDF({ orden, detalles, cliente, categoriaMap }) {
   const doc = new jsPDF()
   const fiscal = cliente.datos_fiscales ?? {}
   const statusLabel = ORDER_STATUS[orden.status] ?? orden.status
@@ -48,7 +49,7 @@ export function generateOrdenPDF({ orden, detalles, cliente }) {
   let y = addLines(
     doc,
     [
-      `Categoría: ${CATEGORIAS[orden.categoria] ?? orden.categoria}`,
+      `Categoría: ${nombreCategoria(orden.categoria, categoriaMap)}`,
       `Número de orden: ${orden.id}`,
       `Fecha de orden: ${formatFecha(new Date(orden.creado_en ?? Date.now()))}`,
       `Estado: ${statusLabel}`,
@@ -100,36 +101,68 @@ export function generateOrdenPDF({ orden, detalles, cliente }) {
     y = addWrappedLine(doc, 'Dirección de envío', getDireccionEnvio(fiscal), 14, y)
   }
 
-  const tableBody = detalles.map((d) => [
-    d.codigo,
-    d.descripcion,
-    d.clase,
-    String(d.cantidad),
-    formatMXN(d.precio_unitario),
-    formatMXN(d.subtotal),
-  ])
+  const descuentoAplicado = Number(orden.descuento_aplicado ?? 0)
+
+  const tableBody = detalles.map((d) => {
+    const precioDoble = esPrecioDobleSinReactivo(d, descuentoAplicado)
+    const condicion = precioDoble
+      ? `×2 sin Reactivo (hab. ${formatMXN(precioHabitualLinea(d, descuentoAplicado))})`
+      : '—'
+
+    return [
+      d.codigo,
+      d.descripcion,
+      d.clase,
+      String(d.cantidad),
+      formatMXN(d.precio_unitario),
+      condicion,
+      formatMXN(d.subtotal),
+    ]
+  })
+
+  const hayPrecioDoble = detalles.some((d) => esPrecioDobleSinReactivo(d, descuentoAplicado))
 
   autoTable(doc, {
     startY: y + 4,
-    head: [['Código', 'Descripción', 'Clase', 'Cant.', 'P. Unit.', 'Subtotal']],
+    head: [['Código', 'Descripción', 'Clase', 'Cant.', 'P. Unit.', 'Condición', 'Subtotal']],
     body: tableBody,
     styles: { fontSize: 8, cellPadding: 2 },
     headStyles: { fillColor: [38, 166, 154] },
+    columnStyles: {
+      5: { cellWidth: 38, fontSize: 7 },
+    },
   })
 
-  const finalY = doc.lastAutoTable.finalY + 10
+  let finalY = doc.lastAutoTable.finalY + 6
+
+  if (hayPrecioDoble) {
+    doc.setFontSize(7)
+    doc.setTextColor(120, 80, 0)
+    const notaPrecioDoble =
+      'Los productos con condición ×2 sin Reactivo se cobraron al doble de su tarifa habitual por no incluir el Reactivo del mismo grupo.'
+    const notaWrapped = doc.splitTextToSize(notaPrecioDoble, 180)
+    doc.text(notaWrapped, 14, finalY)
+    finalY += notaWrapped.length * 4 + 4
+    doc.setTextColor(0, 0, 0)
+  }
+
+  finalY += 4
+  const totales = getTotalesOrdenDesglose(orden)
 
   doc.setFontSize(10)
-  doc.text(`Subtotal: ${formatMXN(orden.subtotal)}`, 140, finalY, { align: 'right' })
-  doc.text(
-    `Descuento aplicado: ${Number(orden.descuento_aplicado).toFixed(2)}%`,
-    140,
-    finalY + 6,
-    { align: 'right' },
-  )
+  doc.text(`Subtotal: ${formatMXN(totales.subtotal)}`, 140, finalY, { align: 'right' })
+  let totalY = finalY + 6
+  if (totales.iva > 0) {
+    doc.text(`IVA (16%): ${formatMXN(totales.iva)}`, 140, totalY, { align: 'right' })
+    totalY += 6
+  }
+  if (totales.envio > 0) {
+    doc.text(`Gastos de envío: ${formatMXN(totales.envio)}`, 140, totalY, { align: 'right' })
+    totalY += 6
+  }
   doc.setFontSize(12)
   doc.setFont(undefined, 'bold')
-  doc.text(`Total: ${formatMXN(orden.total)}`, 140, finalY + 14, { align: 'right' })
+  doc.text(`Total: ${formatMXN(totales.total)}`, 140, totalY + 2, { align: 'right' })
 
   doc.setFont(undefined, 'normal')
   doc.setFontSize(8)
@@ -151,8 +184,9 @@ export async function generateAndUploadOrdenPDF({
   detalles,
   cliente,
   supabaseClient,
+  categoriaMap,
 }) {
-  const blob = generateOrdenPDF({ orden, detalles, cliente })
+  const blob = generateOrdenPDF({ orden, detalles, cliente, categoriaMap })
   const path = getOrdenPdfPath(cliente.id, orden.id, orden.categoria)
 
   await supabaseClient.storage.from('documentos').remove([path])
@@ -206,6 +240,7 @@ export async function regenerarPdfOrden(ordenId, supabaseClient) {
       ),
       detalle_orden (
         cantidad,
+        precio_base_unitario,
         precio_unitario,
         subtotal,
         productos (
@@ -234,15 +269,20 @@ export async function regenerarPdfOrden(ordenId, supabaseClient) {
     descripcion: d.productos?.descripcion ?? '—',
     clase: d.productos?.clase ?? '—',
     cantidad: d.cantidad,
+    precio_base_unitario: d.precio_base_unitario,
     precio_unitario: d.precio_unitario,
     subtotal: d.subtotal,
   }))
+
+  const categoriasRows = await fetchCategoriasDesdeBd(supabaseClient, { soloActivas: false })
+  const categoriaMap = mapCategorias(categoriasRows)
 
   const { signedUrl } = await generateAndUploadOrdenPDF({
     orden,
     detalles,
     cliente,
     supabaseClient,
+    categoriaMap,
   })
 
   const { error: updateError } = await supabaseClient

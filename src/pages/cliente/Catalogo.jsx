@@ -1,51 +1,56 @@
 import { useEffect, useMemo, useState } from 'react'
+import ConfirmacionModal from '../../components/ConfirmacionModal'
+import AlertaModal from '../../components/AlertaModal'
 import { useAuth } from '../../hooks/useAuth'
 import { useCarrito } from '../../hooks/useCarrito'
+import { useCategorias } from '../../hooks/useCategorias'
 import { supabase } from '../../lib/supabaseClient'
-import { CATEGORIAS, CATEGORIA_KEYS } from '../../lib/constants'
+import { MULTIPLICADOR_PRECIO_SIN_REACTIVO } from '../../lib/constants'
+import { mensajeConfirmacionPrecioDoble } from '../../lib/cartValidation'
 import { getSafeErrorMessage } from '../../lib/errors'
 import { calcularPrecioUnitario, formatMXN } from '../../lib/pricing'
 import { sanitizeText } from '../../lib/validation'
 
 export default function Catalogo() {
   const { cliente } = useAuth()
+  const { categoriaKeys, categoriaMap } = useCategorias()
   const { agregarProducto, totalItems } = useCarrito()
   const [productos, setProductos] = useState([])
-  const [descuento, setDescuento] = useState(0)
-  const [categoria, setCategoria] = useState(CATEGORIA_KEYS[0])
+  const [categoria, setCategoria] = useState('')
   const [busqueda, setBusqueda] = useState('')
   const [claseFiltro, setClaseFiltro] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [toast, setToast] = useState(null)
+  const [alertaCarrito, setAlertaCarrito] = useState(null)
+  const [confirmacionCarrito, setConfirmacionCarrito] = useState(null)
+
+  const descuento = Number(cliente?.porcentaje_descuento ?? 0)
+
+  useEffect(() => {
+    if (categoriaKeys.length && !categoriaKeys.includes(categoria)) {
+      setCategoria(categoriaKeys[0])
+    }
+  }, [categoriaKeys, categoria])
 
   useEffect(() => {
     async function cargarDatos() {
-      if (!cliente) return
+      if (!cliente || !categoria) return
 
       setLoading(true)
       setError('')
 
       try {
-        const [productosRes, descuentoRes] = await Promise.all([
-          supabase
-            .from('productos')
-            .select('id, codigo, descripcion, clase, categoria, precio_base, grupo_prueba')
-            .eq('categoria', categoria)
-            .eq('activo', true)
-            .order('codigo'),
-          supabase
-            .from('descuentos_nivel')
-            .select('porcentaje_descuento')
-            .eq('nivel', cliente.nivel)
-            .single(),
-        ])
+        const { data, error: productosError } = await supabase
+          .from('productos')
+          .select('id, codigo, descripcion, clase, categoria, precio_base, grupo_prueba')
+          .eq('categoria', categoria)
+          .eq('activo', true)
+          .order('codigo')
 
-        if (productosRes.error) throw productosRes.error
-        if (descuentoRes.error) throw descuentoRes.error
+        if (productosError) throw productosError
 
-        setProductos(productosRes.data ?? [])
-        setDescuento(Number(descuentoRes.data?.porcentaje_descuento ?? 0))
+        setProductos(data ?? [])
       } catch (err) {
         setError(getSafeErrorMessage(err, 'No se pudo cargar el catálogo'))
         setProductos([])
@@ -84,9 +89,41 @@ export default function Catalogo() {
     const result = agregarProducto(producto, 1)
     if (result.ok) {
       showToast(`${producto.codigo} agregado al carrito`)
-    } else {
-      showToast(result.message, 'error')
+      return
     }
+
+    if (result.requiresConfirmacion) {
+      const precioNormal = calcularPrecioUnitario(producto.precio_base, descuento)
+      const precioDoble =
+        Math.round(precioNormal * MULTIPLICADOR_PRECIO_SIN_REACTIVO * 100) / 100
+      setConfirmacionCarrito({
+        producto,
+        mensaje: mensajeConfirmacionPrecioDoble(
+          producto,
+          formatMXN(precioNormal),
+          formatMXN(precioDoble),
+        ),
+      })
+      return
+    }
+
+    setAlertaCarrito(result.message)
+  }
+
+  function handleConfirmarAgregar() {
+    if (!confirmacionCarrito) return
+
+    const { producto } = confirmacionCarrito
+    const result = agregarProducto(producto, 1, { confirmarPrecioDoble: true })
+
+    if (result.ok) {
+      showToast(`${producto.codigo} agregado al carrito`)
+      setConfirmacionCarrito(null)
+      return
+    }
+
+    setConfirmacionCarrito(null)
+    setAlertaCarrito(result.message ?? 'No se pudo agregar el producto al carrito')
   }
 
   return (
@@ -94,9 +131,7 @@ export default function Catalogo() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Catálogo</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Precios con descuento de nivel ({descuento}%)
-          </p>
+          <p className="mt-1 text-sm text-gray-500">Productos disponibles para su cuenta</p>
         </div>
       </div>
 
@@ -112,9 +147,22 @@ export default function Catalogo() {
         </div>
       )}
 
+      <AlertaModal
+        titulo="No se puede agregar al carrito"
+        mensaje={alertaCarrito}
+        onCerrar={() => setAlertaCarrito(null)}
+      />
+
+      <ConfirmacionModal
+        titulo="Precio sin Reactivo"
+        mensaje={confirmacionCarrito?.mensaje}
+        onConfirmar={handleConfirmarAgregar}
+        onCancelar={() => setConfirmacionCarrito(null)}
+      />
+
       <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
         <div className="flex rounded-lg border border-gray-200 bg-white p-1">
-          {CATEGORIA_KEYS.map((key) => (
+          {categoriaKeys.map((key) => (
             <button
               key={key}
               type="button"
@@ -125,7 +173,7 @@ export default function Catalogo() {
                   : 'text-gray-600 hover:bg-gray-100'
               }`}
             >
-              {CATEGORIAS[key]}
+              {categoriaMap[key]}
             </button>
           ))}
         </div>
@@ -172,15 +220,13 @@ export default function Catalogo() {
                 <th className="px-4 py-3">Código</th>
                 <th className="px-4 py-3">Descripción</th>
                 <th className="px-4 py-3">Clase</th>
-                <th className="px-4 py-3 text-right">Precio base</th>
-                <th className="px-4 py-3 text-right">Su precio</th>
+                <th className="px-4 py-3 text-right">Precio</th>
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {productosFiltrados.map((producto) => {
                 const precioFinal = calcularPrecioUnitario(producto.precio_base, descuento)
-                const tieneDescuento = descuento > 0
 
                 return (
                   <tr key={producto.id} className="hover:bg-gray-50">
@@ -190,15 +236,6 @@ export default function Catalogo() {
                       <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs">
                         {producto.clase}
                       </span>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {tieneDescuento ? (
-                        <span className="text-gray-400 line-through">
-                          {formatMXN(producto.precio_base)}
-                        </span>
-                      ) : (
-                        formatMXN(producto.precio_base)
-                      )}
                     </td>
                     <td className="px-4 py-3 text-right font-semibold text-labotec-teal-dark">
                       {formatMXN(precioFinal)}

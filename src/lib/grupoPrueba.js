@@ -53,5 +53,5 @@ export function requiereGrupoPrueba(clase) {
 }
 
 export function mensajeGrupoPruebaFaltante(codigo, clase) {
-  return `Reactivo, Calibrador y Control requieren grupo de prueba (columna Grupo alineada con los datos, o prefijo del código): ${codigo} (${clase})`
+  return `El producto ${codigo} (${clase}) requiere un grupo de prueba. Complételo en la columna Grupo del archivo.`
 }

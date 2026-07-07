@@ -1,22 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   actualizarCliente,
-  actualizarDescuentoNivel,
   crearCliente,
   desactivarCliente,
   listarClientes,
-  obtenerDescuentosNivel,
   reactivarCliente,
   restablecerPasswordCliente,
 } from '../../lib/admin/clientes'
-import { NIVELES_CLIENTE } from '../../lib/constants'
 import { getSafeErrorMessage } from '../../lib/errors'
-
-const NIVEL_OPTIONS = [
-  { value: 1, label: '1 — Estándar' },
-  { value: 2, label: '2 — Preferente' },
-  { value: 3, label: '3 — Premium' },
-]
 
 function Modal({ open, onClose, title, children }) {
   if (!open) return null
@@ -37,7 +28,6 @@ function Modal({ open, onClose, title, children }) {
 
 export default function Clientes() {
   const [clientes, setClientes] = useState([])
-  const [descuentos, setDescuentos] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -48,7 +38,7 @@ export default function Clientes() {
     nombre: '',
     email: '',
     password: '',
-    nivel: 1,
+    porcentaje_descuento: '0',
   })
   const [passwordNueva, setPasswordNueva] = useState('')
   const [guardando, setGuardando] = useState(false)
@@ -57,14 +47,10 @@ export default function Clientes() {
     setLoading(true)
     setError('')
     try {
-      const [lista, desc] = await Promise.all([
-        listarClientes(),
-        obtenerDescuentosNivel(),
-      ])
+      const lista = await listarClientes()
       setClientes(lista)
-      setDescuentos(desc)
     } catch (err) {
-      setError(getSafeErrorMessage(err, 'Error al cargar datos'))
+      setError(getSafeErrorMessage(err, 'No se pudieron cargar los clientes'))
     } finally {
       setLoading(false)
     }
@@ -84,9 +70,12 @@ export default function Clientes() {
     setGuardando(true)
     setError('')
     try {
-      await crearCliente(formCrear)
+      await crearCliente({
+        ...formCrear,
+        porcentaje_descuento: Number(formCrear.porcentaje_descuento),
+      })
       setModalCrear(false)
-      setFormCrear({ nombre: '', email: '', password: '', nivel: 1 })
+      setFormCrear({ nombre: '', email: '', password: '', porcentaje_descuento: '0' })
       flash('Cliente creado correctamente')
       await cargar()
     } catch (err) {
@@ -96,14 +85,14 @@ export default function Clientes() {
     }
   }
 
-  async function handleCambioNivel(clienteId, nivel) {
+  async function handleCambioDescuento(clienteId, valor) {
     setError('')
     try {
-      await actualizarCliente(clienteId, { nivel: Number(nivel) })
-      flash('Nivel actualizado')
+      await actualizarCliente(clienteId, { porcentaje_descuento: Number(valor) })
+      flash('Descuento actualizado')
       await cargar()
     } catch (err) {
-      setError(getSafeErrorMessage(err, 'No se pudo cambiar el nivel'))
+      setError(getSafeErrorMessage(err, 'No se pudo actualizar el descuento'))
     }
   }
 
@@ -140,24 +129,13 @@ export default function Clientes() {
     }
   }
 
-  async function handleGuardarDescuento(nivel, valor) {
-    setError('')
-    try {
-      await actualizarDescuentoNivel(nivel, valor)
-      flash(`Descuento nivel ${nivel} actualizado`)
-      await cargar()
-    } catch (err) {
-      setError(getSafeErrorMessage(err, 'No se pudo guardar el descuento'))
-    }
-  }
-
   return (
     <div className="p-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Clientes</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Crear cuentas, asignar nivel y configurar descuentos
+            Crear cuentas y asignar el descuento de cada cliente
           </p>
         </div>
         <button
@@ -176,23 +154,6 @@ export default function Clientes() {
         <div className="mt-4 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">{success}</div>
       )}
 
-      <section className="mt-8 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-        <h2 className="font-semibold text-gray-900">Descuentos por nivel</h2>
-        <p className="mt-1 text-xs text-gray-500">
-          Solo afecta órdenes futuras. Las existentes conservan su snapshot.
-        </p>
-        <div className="mt-4 grid gap-4 sm:grid-cols-3">
-          {descuentos.map((d) => (
-            <DescuentoInput
-              key={d.nivel}
-              nivel={d.nivel}
-              valor={d.porcentaje_descuento}
-              onSave={handleGuardarDescuento}
-            />
-          ))}
-        </div>
-      </section>
-
       {loading ? (
         <div className="mt-12 flex justify-center">
           <div className="h-10 w-10 animate-spin rounded-full border-4 border-labotec-teal border-t-transparent" />
@@ -204,7 +165,7 @@ export default function Clientes() {
               <tr>
                 <th className="px-4 py-3">Nombre</th>
                 <th className="px-4 py-3">Email</th>
-                <th className="px-4 py-3">Nivel</th>
+                <th className="px-4 py-3">Descuento</th>
                 <th className="px-4 py-3">Estado</th>
                 <th className="px-4 py-3">Datos fiscales</th>
                 <th className="px-4 py-3">Acciones</th>
@@ -223,18 +184,11 @@ export default function Clientes() {
                     <td className="px-4 py-3 font-medium">{c.nombre}</td>
                     <td className="px-4 py-3 text-gray-600">{c.email}</td>
                     <td className="px-4 py-3">
-                      <select
-                        value={c.nivel}
+                      <DescuentoInput
+                        valor={c.porcentaje_descuento ?? 0}
                         disabled={!c.activo}
-                        onChange={(e) => handleCambioNivel(c.id, e.target.value)}
-                        className="rounded border border-gray-300 px-2 py-1 text-sm disabled:cursor-not-allowed"
-                      >
-                        {NIVEL_OPTIONS.map((o) => (
-                          <option key={o.value} value={o.value}>
-                            {o.label}
-                          </option>
-                        ))}
-                      </select>
+                        onSave={(valor) => handleCambioDescuento(c.id, valor)}
+                      />
                     </td>
                     <td className="px-4 py-3">
                       <span
@@ -301,20 +255,16 @@ export default function Clientes() {
             required
             hint="Mínimo 8 caracteres. El cliente debería cambiarla."
           />
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Nivel</label>
-            <select
-              value={formCrear.nivel}
-              onChange={(e) => setFormCrear((f) => ({ ...f, nivel: Number(e.target.value) }))}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            >
-              {NIVEL_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </div>
+          <Field
+            label="Descuento (%)"
+            type="number"
+            min={0}
+            max={99.99}
+            step={0.01}
+            value={formCrear.porcentaje_descuento}
+            onChange={(v) => setFormCrear((f) => ({ ...f, porcentaje_descuento: v }))}
+            hint="Porcentaje aplicado al precio base de cada producto."
+          />
           <button
             type="submit"
             disabled={guardando}
@@ -355,7 +305,7 @@ export default function Clientes() {
   )
 }
 
-function Field({ label, value, onChange, type = 'text', required, hint }) {
+function Field({ label, value, onChange, type = 'text', required, hint, min, max, step }) {
   return (
     <div>
       <label className="mb-1 block text-sm font-medium text-gray-700">{label}</label>
@@ -363,6 +313,9 @@ function Field({ label, value, onChange, type = 'text', required, hint }) {
         type={type}
         value={value}
         required={required}
+        min={min}
+        max={max}
+        step={step}
         onChange={(e) => onChange(e.target.value)}
         className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-labotec-teal focus:outline-none"
       />
@@ -371,7 +324,7 @@ function Field({ label, value, onChange, type = 'text', required, hint }) {
   )
 }
 
-function DescuentoInput({ nivel, valor, onSave }) {
+function DescuentoInput({ valor, onSave, disabled }) {
   const [local, setLocal] = useState(String(valor))
   const [saving, setSaving] = useState(false)
 
@@ -380,31 +333,26 @@ function DescuentoInput({ nivel, valor, onSave }) {
   }, [valor])
 
   async function handleBlur() {
-    if (Number(local) === Number(valor)) return
+    if (disabled || Number(local) === Number(valor)) return
     setSaving(true)
-    await onSave(nivel, local)
+    await onSave(local)
     setSaving(false)
   }
 
   return (
-    <div className="rounded-lg border border-gray-200 p-3">
-      <p className="text-sm font-medium text-gray-800">
-        Nivel {nivel} — {NIVELES_CLIENTE[nivel]}
-      </p>
-      <div className="mt-2 flex items-center gap-2">
-        <input
-          type="number"
-          min={0}
-          max={99.99}
-          step={0.01}
-          value={local}
-          onChange={(e) => setLocal(e.target.value)}
-          onBlur={handleBlur}
-          disabled={saving}
-          className="w-20 rounded border border-gray-300 px-2 py-1 text-sm"
-        />
-        <span className="text-sm text-gray-500">%</span>
-      </div>
+    <div className="flex items-center gap-1">
+      <input
+        type="number"
+        min={0}
+        max={99.99}
+        step={0.01}
+        value={local}
+        onChange={(e) => setLocal(e.target.value)}
+        onBlur={handleBlur}
+        disabled={disabled || saving}
+        className="w-20 rounded border border-gray-300 px-2 py-1 text-sm disabled:cursor-not-allowed"
+      />
+      <span className="text-sm text-gray-500">%</span>
     </div>
   )
 }

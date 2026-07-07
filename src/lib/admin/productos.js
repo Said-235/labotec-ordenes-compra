@@ -1,9 +1,10 @@
 import { assertAdminSession, getSupabaseAdmin } from '../supabaseAdmin'
-import { CATEGORIA_KEYS, CLASES_PRODUCTO } from '../constants'
+import { CLASES_PRODUCTO } from '../constants'
+import { obtenerClavesCategoriasActivas } from './categorias'
 import { CLASES_REQUIEREN_REACTIVO } from '../cartValidation'
 import { sanitizeText } from '../validation'
 
-function validateProductoInput(data, { isUpdate = false } = {}) {
+function validateProductoInput(data, categoriaKeys, { isUpdate = false } = {}) {
   const codigo = sanitizeText(data.codigo, 50)
   const descripcion = sanitizeText(data.descripcion, 500)
   const clase = sanitizeText(data.clase, 50)
@@ -14,7 +15,7 @@ function validateProductoInput(data, { isUpdate = false } = {}) {
   if (!isUpdate && !codigo) throw new Error('El código es requerido')
   if (data.descripcion != null && !descripcion) throw new Error('La descripción es requerida')
   if (data.clase != null && !CLASES_PRODUCTO.includes(clase)) throw new Error('Clase inválida')
-  if (data.categoria != null && !CATEGORIA_KEYS.includes(categoria)) {
+  if (data.categoria != null && !categoriaKeys.includes(categoria)) {
     throw new Error('Categoría inválida')
   }
   if (data.precio_base != null && (!Number.isFinite(precioBase) || precioBase < 0)) {
@@ -66,8 +67,9 @@ export async function listarProductos({ categoria, soloActivos } = {}) {
 export async function crearProducto(data) {
   await assertAdminSession()
   const admin = getSupabaseAdmin()
+  const categoriaKeys = await obtenerClavesCategoriasActivas()
 
-  const clean = validateProductoInput(data)
+  const clean = validateProductoInput(data, categoriaKeys)
 
   const { data: producto, error } = await admin
     .from('productos')
@@ -99,8 +101,9 @@ export async function crearProducto(data) {
 export async function actualizarProducto(productoId, data) {
   await assertAdminSession()
   const admin = getSupabaseAdmin()
+  const categoriaKeys = await obtenerClavesCategoriasActivas()
 
-  const clean = validateProductoInput(data, { isUpdate: true })
+  const clean = validateProductoInput(data, categoriaKeys, { isUpdate: true })
   const updates = Object.fromEntries(
     Object.entries(clean).filter(([, v]) => v !== undefined),
   )

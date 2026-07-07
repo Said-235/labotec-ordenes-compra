@@ -7,7 +7,7 @@ import {
   validarComprobante,
   rechazarComprobante,
 } from '../../lib/admin/ordenes'
-import { CATEGORIAS } from '../../lib/constants'
+import { useCategorias } from '../../hooks/useCategorias'
 import { esEnvioIgualFiscal, getDireccionEnvio } from '../../lib/datosCliente'
 import { getSafeErrorMessage } from '../../lib/errors'
 import { formatMXN } from '../../lib/pricing'
@@ -20,6 +20,7 @@ function formatFecha(iso) {
 }
 
 export default function OrdenesAdmin() {
+  const { getNombreCategoria } = useCategorias()
   const [ordenes, setOrdenes] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -163,7 +164,7 @@ export default function OrdenesAdmin() {
                 >
                   <div>
                     <p className="font-medium text-gray-900">
-                      {orden.clientes?.nombre} — {CATEGORIAS[orden.categoria]}
+                      {orden.clientes?.nombre} — {getNombreCategoria(orden.categoria)}
                     </p>
                     <p className="text-sm text-gray-600">{orden.clientes?.email}</p>
                     <p className="mt-0.5 text-xs text-gray-500">

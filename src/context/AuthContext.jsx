@@ -7,11 +7,11 @@ export const AuthContext = createContext(null)
 async function fetchClienteProfile(userId) {
   const { data, error } = await supabase
     .from('clientes')
-    .select('id, nombre, email, es_admin, nivel, primer_login, datos_fiscales, activo')
+    .select('id, nombre, email, es_admin, porcentaje_descuento, primer_login, datos_fiscales, activo')
     .eq('id', userId)
     .single()
 
-  if (error) throw error
+  if (error) throw new Error('No se pudo cargar su perfil de usuario')
   return data
 }
 
@@ -137,7 +137,7 @@ export function AuthProvider({ children }) {
       })
       .eq('id', session.user.id)
 
-    if (updateError) throw updateError
+    if (updateError) throw new Error('No se pudieron guardar los datos fiscales')
 
     await refreshProfile()
   }, [session, refreshProfile])

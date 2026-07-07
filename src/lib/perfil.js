@@ -22,11 +22,26 @@ export async function actualizarPerfilCliente(data) {
     throw new Error('Sesión no válida')
   }
 
+  const { data: clienteActual, error: clienteError } = await supabase
+    .from('clientes')
+    .select('datos_fiscales')
+    .eq('id', user.id)
+    .single()
+
+  if (clienteError) {
+    throw new Error('No se pudieron guardar los cambios')
+  }
+
+  const datosFiscales = {
+    ...(clienteActual?.datos_fiscales ?? {}),
+    ...sanitized.datos_fiscales,
+  }
+
   const { error: updateError } = await supabase
     .from('clientes')
     .update({
       nombre: sanitized.nombre,
-      datos_fiscales: sanitized.datos_fiscales,
+      datos_fiscales: datosFiscales,
     })
     .eq('id', user.id)
 

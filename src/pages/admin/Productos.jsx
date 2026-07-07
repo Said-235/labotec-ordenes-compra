@@ -10,18 +10,21 @@ import {
   eliminarProducto,
   eliminarProductosLote,
 } from '../../lib/admin/eliminarProductos'
-import { CATEGORIAS, CATEGORIA_KEYS, CLASES_PRODUCTO } from '../../lib/constants'
+import { CLASES_PRODUCTO } from '../../lib/constants'
 import { getSafeErrorMessage } from '../../lib/errors'
+import { useCategorias } from '../../hooks/useCategorias'
 import { formatMXN } from '../../lib/pricing'
 import { sanitizeText } from '../../lib/validation'
 
-const FORM_VACIO = {
-  codigo: '',
-  descripcion: '',
-  clase: 'Reactivo',
-  categoria: CATEGORIA_KEYS[0],
-  precio_base: '',
-  grupo_prueba: '',
+function formVacio(categoria = '') {
+  return {
+    codigo: '',
+    descripcion: '',
+    clase: 'Reactivo',
+    categoria,
+    precio_base: '',
+    grupo_prueba: '',
+  }
 }
 
 function Modal({ open, onClose, title, children }) {
@@ -42,6 +45,7 @@ function Modal({ open, onClose, title, children }) {
 }
 
 export default function Productos() {
+  const { categoriaKeys, categoriaMap, getNombreCategoria } = useCategorias()
   const [productos, setProductos] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -54,7 +58,7 @@ export default function Productos() {
 
   const [modalAbierto, setModalAbierto] = useState(false)
   const [editando, setEditando] = useState(null)
-  const [form, setForm] = useState(FORM_VACIO)
+  const [form, setForm] = useState(() => formVacio())
   const [guardando, setGuardando] = useState(false)
   const [seleccionados, setSeleccionados] = useState(new Set())
   const [confirmar, setConfirmar] = useState(null)
@@ -71,7 +75,7 @@ export default function Productos() {
       setProductos(data)
       setSeleccionados(new Set())
     } catch (err) {
-      setError(getSafeErrorMessage(err, 'Error al cargar productos'))
+      setError(getSafeErrorMessage(err, 'No se pudieron cargar los productos'))
     } finally {
       setLoading(false)
     }
@@ -101,7 +105,7 @@ export default function Productos() {
 
   function abrirCrear() {
     setEditando(null)
-    setForm(FORM_VACIO)
+    setForm(formVacio(categoriaKeys[0] ?? ''))
     setModalAbierto(true)
   }
 
@@ -265,8 +269,8 @@ export default function Productos() {
           className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
         >
           <option value="">Todas las categorías</option>
-          {CATEGORIA_KEYS.map((k) => (
-            <option key={k} value={k}>{CATEGORIAS[k]}</option>
+          {categoriaKeys.map((k) => (
+            <option key={k} value={k}>{categoriaMap[k]}</option>
           ))}
         </select>
         <select
@@ -345,7 +349,7 @@ export default function Productos() {
                     <td className="px-4 py-3 text-xs text-gray-600">
                       {p.grupo_prueba || '—'}
                     </td>
-                    <td className="px-4 py-3 text-xs">{CATEGORIAS[p.categoria]}</td>
+                    <td className="px-4 py-3 text-xs">{getNombreCategoria(p.categoria)}</td>
                     <td className="px-4 py-3 text-right">{formatMXN(p.precio_base)}</td>
                     <td className="px-4 py-3">
                       <span
@@ -451,8 +455,8 @@ export default function Productos() {
                 disabled={Boolean(editando)}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:bg-gray-100"
               >
-                {CATEGORIA_KEYS.map((k) => (
-                  <option key={k} value={k}>{CATEGORIAS[k]}</option>
+                {categoriaKeys.map((k) => (
+                  <option key={k} value={k}>{categoriaMap[k]}</option>
                 ))}
               </select>
             </div>

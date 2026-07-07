@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
+import { useCategorias } from '../../hooks/useCategorias'
 import ComprobanteUpload from '../../components/ComprobanteUpload'
+import DetalleOrdenTabla from '../../components/DetalleOrdenTabla'
 import StatusBadge from '../../components/StatusBadge'
 import { getComprobanteSignedUrl } from '../../lib/comprobantes'
-import { CATEGORIAS } from '../../lib/constants'
 import { getSafeErrorMessage } from '../../lib/errors'
 import { obtenerMisOrdenes, getOrdenPdfUrl, cancelarOrden, puedeCancelarOrden } from '../../lib/ordenes'
 import { formatMXN } from '../../lib/pricing'
@@ -18,6 +19,7 @@ function formatFecha(iso) {
 
 export default function MisOrdenes() {
   const { cliente } = useAuth()
+  const { getNombreCategoria } = useCategorias()
   const [searchParams] = useSearchParams()
   const ordenDestacada = searchParams.get('orden')
   const [ordenes, setOrdenes] = useState([])
@@ -157,7 +159,7 @@ export default function MisOrdenes() {
                 >
                   <div>
                     <p className="font-medium text-gray-900">
-                      {CATEGORIAS[orden.categoria]} — {formatMXN(orden.total)}
+                      {getNombreCategoria(orden.categoria)} — {formatMXN(orden.total)}
                     </p>
                     <p className="mt-0.5 text-xs text-gray-500">{formatFecha(orden.creado_en)}</p>
                   </div>
@@ -248,30 +250,7 @@ export default function MisOrdenes() {
                     />
 
                     {orden.detalle_orden?.length > 0 && (
-                      <div className="mt-4 overflow-x-auto">
-                        <table className="min-w-full text-left text-xs">
-                          <thead>
-                            <tr className="text-gray-500">
-                              <th className="py-1 pr-3">Código</th>
-                              <th className="py-1 pr-3">Descripción</th>
-                              <th className="py-1 pr-3">Cant.</th>
-                              <th className="py-1 text-right">Subtotal</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {orden.detalle_orden.map((d) => (
-                              <tr key={d.id} className="border-t border-gray-100">
-                                <td className="py-1.5 pr-3 font-mono">
-                                  {d.productos?.codigo}
-                                </td>
-                                <td className="py-1.5 pr-3">{d.productos?.descripcion}</td>
-                                <td className="py-1.5 pr-3">{d.cantidad}</td>
-                                <td className="py-1.5 text-right">{formatMXN(d.subtotal)}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
+                      <DetalleOrdenTabla orden={orden} />
                     )}
                   </div>
                 )}
@@ -323,7 +302,7 @@ export default function MisOrdenes() {
             <h2 className="text-lg font-semibold text-gray-900">Cancelar orden</h2>
             <p className="mt-3 text-sm text-gray-600">
               ¿Cancelar la orden de{' '}
-              <strong>{CATEGORIAS[confirmarCancelar.categoria]}</strong> por{' '}
+              <strong>{getNombreCategoria(confirmarCancelar.categoria)}</strong> por{' '}
               <strong>{formatMXN(confirmarCancelar.total)}</strong>?
             </p>
             <p className="mt-2 text-xs text-amber-700">

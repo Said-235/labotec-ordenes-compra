@@ -20,6 +20,11 @@ export const NIVELES_CLIENTE = {
   3: 'Premium',
 }
 
+export const MULTIPLICADOR_PRECIO_SIN_REACTIVO = 2
+
+export const IVA_RATE = 0.16
+export const COSTO_ENVIO = 1000
+
 export const MAX_CANTIDAD_CARRITO = 99
 
 export const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024

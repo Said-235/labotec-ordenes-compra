@@ -48,7 +48,7 @@ export function CarritoProvider({ children }) {
   }, [userId, items])
 
   const agregarProducto = useCallback(
-    (producto, cantidad = 1) => {
+    (producto, cantidad = 1, opciones = {}) => {
       if (!userId) return { ok: false, message: 'Sesión no válida' }
 
       const qty = Math.min(
@@ -56,7 +56,7 @@ export function CarritoProvider({ children }) {
         Math.max(1, Math.floor(Number(cantidad) || 1)),
       )
 
-      const validacion = puedeAgregarAlCarrito(producto, items)
+      const validacion = puedeAgregarAlCarrito(producto, items, opciones)
       if (!validacion.ok) return validacion
 
       setItems((prev) => {

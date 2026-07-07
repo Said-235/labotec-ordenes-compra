@@ -2,7 +2,6 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useCarrito } from '../hooks/useCarrito'
 import { useNotificaciones } from '../hooks/useNotificaciones'
-import { NIVELES_CLIENTE } from '../lib/constants'
 
 const navItems = [
   { to: '/catalogo', label: 'Catálogo', end: true },
@@ -13,7 +12,7 @@ const navItems = [
 ]
 
 export default function ClientLayout() {
-  const { cliente, signOut } = useAuth()
+  const { signOut } = useAuth()
   const { totalItems } = useCarrito()
   const { noLeidas: notificacionesNoLeidas } = useNotificaciones()
 
@@ -25,11 +24,6 @@ export default function ClientLayout() {
             <img src="/logo-labotec.png" alt="Labotec" className="h-10 w-10" />
             <div>
               <p className="text-sm font-bold text-gray-900">Labotec Supply</p>
-              {cliente && (
-                <p className="text-xs text-gray-500">
-                  Nivel {cliente.nivel} — {NIVELES_CLIENTE[cliente.nivel]}
-                </p>
-              )}
             </div>
           </div>
 

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useCarrito } from '../../hooks/useCarrito'
-import { CATEGORIAS } from '../../lib/constants'
+import { useCategorias } from '../../hooks/useCategorias'
 import { getSafeErrorMessage } from '../../lib/errors'
 import { mensajeViolacionesReactivo } from '../../lib/cartValidation'
 import { confirmarOrden } from '../../lib/orders/confirmarOrden'
@@ -16,6 +16,7 @@ export default function Carrito() {
     eliminarProducto,
     vaciarCarrito,
   } = useCarrito()
+  const { getNombreCategoria } = useCategorias()
 
   const [confirmando, setConfirmando] = useState(false)
   const [error, setError] = useState('')
@@ -88,7 +89,7 @@ export default function Carrito() {
                 className="rounded-lg bg-white p-4 text-sm shadow-sm"
               >
                 <p className="font-medium">
-                  {CATEGORIAS[orden.categoria]} — {formatMXN(orden.total)}
+                  {getNombreCategoria(orden.categoria)} — {formatMXN(orden.total)}
                 </p>
                 <p className="mt-1 text-xs text-gray-500 font-mono">{orden.id}</p>
                 {orden.pdf_url && (
@@ -147,7 +148,7 @@ export default function Carrito() {
           {Object.entries(porCategoria).map(([cat, lineas]) => (
             <section key={cat} className="mt-6">
               <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">
-                {CATEGORIAS[cat]}
+                {getNombreCategoria(cat)}
               </h2>
               <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
                 <table className="min-w-full text-left text-sm">

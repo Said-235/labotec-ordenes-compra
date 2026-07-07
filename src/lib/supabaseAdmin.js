@@ -20,7 +20,7 @@ function createAdminClient() {
 
   if (!url || !serviceRoleKey) {
     throw new Error(
-      'Faltan variables de entorno de admin. Configure VITE_SUPABASE_SERVICE_ROLE_KEY.',
+      'El sistema no está configurado correctamente. Contacte al administrador.',
     )
   }
 

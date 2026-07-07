@@ -2,7 +2,9 @@ import { assertAdminSession, getSupabaseAdmin } from '../supabaseAdmin'
 import { eliminarProductosPorCarga, productoEnOrdenes } from './eliminarProductos'
 
 export { eliminarProductosPorCarga }
-import { CATEGORIAS } from '../constants'
+import { nombreCategoria } from '../categorias'
+import { listarCategorias, obtenerClavesCategoriasActivas } from './categorias'
+import { mapCategorias } from '../categorias'
 import {
   deriveGrupoFromCodigo,
   mensajeGrupoPruebaFaltante,
@@ -11,6 +13,7 @@ import {
   resolveGrupoPrueba,
 } from '../grupoPrueba'
 import { parseODSFile } from '../odsParser'
+import { sanitizeRowErrorMessage } from '../errors'
 import { sanitizeText } from '../validation'
 
 function variantesCodigo(codigo) {
@@ -49,30 +52,23 @@ function validarPayload(row, payload) {
   return null
 }
 
-function mensajeErrorDb(error, row, categoria) {
+function mensajeErrorDb(error, row, categoria, categoriaMap) {
   if (error?.code === '23514') {
-    const detalle = sanitizeText(error?.message, 300)
-    const catLabel = CATEGORIAS[categoria] ?? categoria
+    const detalle = error?.message ?? ''
+    const catLabel = nombreCategoria(categoria, categoriaMap)
 
     if (detalle.includes('productos_categoria_check') || detalle.includes('_categoria_check')) {
-      return `La categoría "${catLabel}" no está habilitada en Supabase. Ejecute supabase/09_categoria_inmuno.sql en el SQL Editor.`
+      return `La categoría "${catLabel}" no está habilitada en el sistema`
     }
 
-    if (detalle.includes('grupo_prueba') && requiereGrupoPrueba(row.clase)) {
+    if (requiereGrupoPrueba(row.clase)) {
       return mensajeGrupoPruebaFaltante(row.codigo, row.clase)
     }
 
-    if (requiereGrupoPrueba(row.clase) && !detalle.includes('check constraint')) {
-      return mensajeGrupoPruebaFaltante(row.codigo, row.clase)
-    }
-
-    return detalle
-      ? `No cumple una regla de validación en base de datos: ${detalle}`
-      : 'No cumple una regla de validación en base de datos (revise clase, categoría y grupo de prueba)'
+    return 'Los datos del producto no cumplen las reglas del sistema (revise clase, categoría y grupo de prueba)'
   }
   if (error?.code === '23505') return null
-  const detalle = error?.code ? ` (${error.code})` : ''
-  return `Error al guardar producto${detalle}`
+  return 'No se pudo guardar el producto'
 }
 
 function deduplicarFilas(validRows) {
@@ -87,7 +83,7 @@ function resumirErrores(errors, max = 5) {
   if (!errors.length) return ''
   return errors
     .slice(0, max)
-    .map((e) => `${e.codigo}: ${e.mensaje}`)
+    .map((e) => `${e.codigo}: ${sanitizeRowErrorMessage(e.mensaje)}`)
     .join(' · ')
 }
 
@@ -101,7 +97,7 @@ async function buscarEnCategoria(admin, codigo, categoria) {
       .limit(1)
 
     if (error) {
-      return { error: 'Error al consultar producto existente' }
+      return { error: 'No se pudo verificar si el producto ya existe' }
     }
 
     if (data?.[0]) {
@@ -121,7 +117,7 @@ async function listarEnOtrasCategorias(admin, codigo, categoria) {
     .neq('categoria', categoria)
 
   if (error) {
-    return { error: 'Error al consultar producto en otras categorías' }
+    return { error: 'No se pudo verificar el producto en otras categorías' }
   }
 
   return { data: data ?? [] }
@@ -148,7 +144,7 @@ async function insertarProducto(admin, row, payload) {
 /**
  * Mueve un producto de otra categoría a la categoría del ODS (p. ej. carga en categoría equivocada).
  */
-async function reubicarDesdeOtraCategoria(admin, row, otros) {
+async function reubicarDesdeOtraCategoria(admin, row, otros, categoriaMap) {
   if (otros.length !== 1) {
     return {
       ok: false,
@@ -161,7 +157,7 @@ async function reubicarDesdeOtraCategoria(admin, row, otros) {
   }
 
   const [otro] = otros
-  const catLabel = CATEGORIAS[otro.categoria] ?? otro.categoria
+  const catLabel = nombreCategoria(otro.categoria, categoriaMap)
 
   try {
     if (await productoEnOrdenes(admin, otro.id)) {
@@ -199,7 +195,7 @@ async function reubicarDesdeOtraCategoria(admin, row, otros) {
       ok: false,
       codigo: row.codigo,
       mensaje:
-        mensajeErrorDb(moveError, row, row.categoria) ??
+        mensajeErrorDb(moveError, row, row.categoria, categoriaMap) ??
         `No se pudo mover de "${catLabel}" a la categoría indicada`,
     }
   }
@@ -211,7 +207,7 @@ async function reubicarDesdeOtraCategoria(admin, row, otros) {
  * Inserta copia en la categoría destino cuando el código ya existe en otra categoría.
  * Si la BD solo permite un código global, reubica como último recurso.
  */
-async function insertarCopiaDesdeOtraCategoria(admin, row, otros) {
+async function insertarCopiaDesdeOtraCategoria(admin, row, otros, categoriaMap) {
   if (!otros.length) {
     return {
       ok: false,
@@ -233,13 +229,13 @@ async function insertarCopiaDesdeOtraCategoria(admin, row, otros) {
   }
 
   if (copyError.code === '23505' && otros.length === 1) {
-    return reubicarDesdeOtraCategoria(admin, row, otros)
+    return reubicarDesdeOtraCategoria(admin, row, otros, categoriaMap)
   }
 
   return {
     ok: false,
     codigo: row.codigo,
-    mensaje: mensajeErrorDb(copyError, row, row.categoria) ?? 'Error al insertar producto en la categoría',
+    mensaje: mensajeErrorDb(copyError, row, row.categoria, categoriaMap) ?? 'No se pudo registrar el producto en esta categoría',
   }
 }
 
@@ -248,7 +244,7 @@ async function insertarCopiaDesdeOtraCategoria(admin, row, otros) {
  * Mismo código en otra categoría → inserta fila nueva si la BD lo permite;
  * si no, reubica el producto a la categoría del ODS.
  */
-async function guardarProductoDesdeOds(admin, row) {
+async function guardarProductoDesdeOds(admin, row, categoriaMap) {
   const codigoNormalizado = normalizeCodigo(row.codigo) || row.codigo
   const fila = { ...row, codigo: codigoNormalizado }
 
@@ -286,7 +282,7 @@ async function guardarProductoDesdeOds(admin, row) {
       return {
         ok: false,
         codigo: fila.codigo,
-        mensaje: mensajeErrorDb(error, fila, fila.categoria) ?? 'Error al actualizar producto',
+        mensaje: mensajeErrorDb(error, fila, fila.categoria, categoriaMap) ?? 'No se pudo actualizar el producto',
       }
     }
     return { ok: true, id: enCategoria.id, accion: 'actualizado' }
@@ -323,7 +319,7 @@ async function guardarProductoDesdeOds(admin, row) {
         return {
           ok: false,
           codigo: fila.codigo,
-          mensaje: mensajeErrorDb(error, fila, fila.categoria) ?? 'Error al actualizar producto existente',
+          mensaje: mensajeErrorDb(error, fila, fila.categoria, categoriaMap) ?? 'No se pudo actualizar el producto existente',
         }
       }
       return { ok: true, id: retryEnCategoria.id, accion: 'actualizado' }
@@ -336,14 +332,14 @@ async function guardarProductoDesdeOds(admin, row) {
     )
 
     if (!otrosError && otros?.length) {
-      return insertarCopiaDesdeOtraCategoria(admin, fila, otros)
+      return insertarCopiaDesdeOtraCategoria(admin, fila, otros, categoriaMap)
     }
   }
 
   return {
     ok: false,
     codigo: fila.codigo,
-    mensaje: mensajeErrorDb(insertError, fila, fila.categoria) ?? 'Error al insertar producto',
+    mensaje: mensajeErrorDb(insertError, fila, fila.categoria, categoriaMap) ?? 'No se pudo registrar el producto',
   }
 }
 
@@ -355,7 +351,10 @@ export async function procesarCargaODS(file, categoria) {
   const { user } = await assertAdminSession()
   const admin = getSupabaseAdmin()
 
-  const { validRows, errors, totalFilas } = await parseODSFile(file, categoria)
+  const categoriaKeys = await obtenerClavesCategoriasActivas()
+  const categoriasRows = await listarCategorias()
+  const categoriaMap = mapCategorias(categoriasRows)
+  const { validRows, errors, totalFilas } = await parseODSFile(file, categoria, { categoriaKeys })
   const filasUnicas = deduplicarFilas(validRows)
 
   if (!filasUnicas.length && !errors.length) {
@@ -368,7 +367,7 @@ export async function procesarCargaODS(file, categoria) {
   const productoIdsAfectados = []
 
   for (const row of filasUnicas) {
-    const resultado = await guardarProductoDesdeOds(admin, row)
+    const resultado = await guardarProductoDesdeOds(admin, row, categoriaMap)
 
     if (!resultado.ok) {
       errors.push({
@@ -400,7 +399,7 @@ export async function procesarCargaODS(file, categoria) {
   const detalleErrores = errors.slice(0, 100).map((e) => ({
     fila: e.fila,
     codigo: e.codigo,
-    mensaje: e.mensaje,
+    mensaje: sanitizeRowErrorMessage(e.mensaje),
   }))
 
   const { error: logError } = await admin.from('log_cargas').insert({

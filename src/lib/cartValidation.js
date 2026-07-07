@@ -1,4 +1,5 @@
 import { sanitizeText } from './validation'
+import { MULTIPLICADOR_PRECIO_SIN_REACTIVO } from './constants'
 
 export const CLASES_REQUIEREN_REACTIVO = ['Calibrador', 'Control']
 
@@ -31,39 +32,30 @@ export function etiquetaGrupo(item) {
   return `${grupo} (${item.categoria})`
 }
 
+export function tieneReactivoMismoGrupo(producto, itemsActuales) {
+  const clave = getClaveGrupoFromItem(producto)
+  if (!clave) return false
+
+  return itemsActuales.some(
+    (item) => item.clase === 'Reactivo' && getClaveGrupoFromItem(item) === clave,
+  )
+}
+
 /**
- * Valida la regla Reactivo → Calibrador/Control en un conjunto de ítems.
+ * Valida que Calibrador/Control tengan grupo de prueba configurado.
  */
 export function validarRestriccionReactivo(items) {
-  const clavesReactivo = new Set(
-    items
-      .filter((item) => item.clase === 'Reactivo')
-      .map((item) => getClaveGrupoFromItem(item))
-      .filter(Boolean),
-  )
-
   const violaciones = []
 
   for (const item of items) {
     if (!CLASES_REQUIEREN_REACTIVO.includes(item.clase)) continue
 
     const clave = getClaveGrupoFromItem(item)
-
     if (!clave) {
       violaciones.push({
         codigo: item.codigo,
         clase: item.clase,
         sinGrupo: true,
-      })
-      continue
-    }
-
-    if (!clavesReactivo.has(clave)) {
-      violaciones.push({
-        codigo: item.codigo,
-        clase: item.clase,
-        grupo: normalizeGrupoPrueba(item.grupo_prueba),
-        categoria: item.categoria,
       })
     }
   }
@@ -74,7 +66,7 @@ export function validarRestriccionReactivo(items) {
 /**
  * Valida si un producto puede agregarse al carrito (frontend).
  */
-export function puedeAgregarAlCarrito(producto, itemsActuales) {
+export function puedeAgregarAlCarrito(producto, itemsActuales, { confirmarPrecioDoble = false } = {}) {
   if (!CLASES_REQUIEREN_REACTIVO.includes(producto.clase)) {
     return { ok: true }
   }
@@ -88,46 +80,37 @@ export function puedeAgregarAlCarrito(producto, itemsActuales) {
     }
   }
 
-  const tieneReactivo = itemsActuales.some(
-    (item) => item.clase === 'Reactivo' && getClaveGrupoFromItem(item) === clave,
-  )
-
-  if (!tieneReactivo) {
-    const grupo = normalizeGrupoPrueba(producto.grupo_prueba)
-    return {
-      ok: false,
-      message: `Para agregar "${producto.codigo}" (${producto.clase}) debe incluir primero un Reactivo del grupo de prueba "${grupo}" en el carrito.`,
-    }
+  if (tieneReactivoMismoGrupo(producto, itemsActuales)) {
+    return { ok: true }
   }
 
-  return { ok: true }
+  if (!confirmarPrecioDoble) {
+    return { ok: false, requiresConfirmacion: true }
+  }
+
+  return { ok: true, precioDoble: true }
+}
+
+export function mensajeConfirmacionPrecioDoble(producto, precioNormal, precioDoble) {
+  const grupo = normalizeGrupoPrueba(producto.grupo_prueba) || '—'
+
+  return [
+    `Puede agregar "${producto.codigo}" (${producto.clase}) sin incluir un Reactivo del grupo "${grupo}" en su carrito.`,
+    '',
+    `En ese caso, el precio unitario será el doble de su tarifa habitual (×${MULTIPLICADOR_PRECIO_SIN_REACTIVO}):`,
+    `• Precio habitual: ${precioNormal}`,
+    `• Precio sin Reactivo: ${precioDoble}`,
+    '',
+    'Si agrega después el Reactivo correspondiente en el mismo carrito, al confirmar la orden se aplicará el precio habitual.',
+    '',
+    '¿Desea agregar este producto bajo estas condiciones?',
+  ].join('\n')
 }
 
 /**
- * Verifica si se puede eliminar un Reactivo sin dejar Calibradores/Controles huérfanos.
+ * Verifica si se puede eliminar un ítem del carrito.
  */
-export function puedeEliminarDelCarrito(item, itemsActuales) {
-  if (item.clase !== 'Reactivo') return { ok: true }
-
-  const clave = getClaveGrupoFromItem(item)
-  if (!clave) return { ok: true }
-
-  const dependientes = itemsActuales.filter(
-    (i) =>
-      i.producto_id !== item.producto_id &&
-      CLASES_REQUIEREN_REACTIVO.includes(i.clase) &&
-      getClaveGrupoFromItem(i) === clave,
-  )
-
-  if (dependientes.length > 0) {
-    const codigos = dependientes.map((d) => d.codigo).join(', ')
-    const grupo = normalizeGrupoPrueba(item.grupo_prueba)
-    return {
-      ok: false,
-      message: `No puede quitar este Reactivo: ${codigos} dependen del grupo de prueba "${grupo}".`,
-    }
-  }
-
+export function puedeEliminarDelCarrito() {
   return { ok: true }
 }
 
@@ -138,8 +121,8 @@ export function mensajeViolacionesReactivo(violaciones) {
     if (v.sinGrupo) {
       return `• ${v.codigo} (${v.clase}) no tiene grupo de prueba configurado`
     }
-    return `• ${v.codigo} (${v.clase}) requiere un Reactivo del grupo "${v.grupo}"`
+    return `• ${v.codigo} (${v.clase})`
   })
 
-  return `Restricción Reactivo → Calibrador/Control:\n${lineas.join('\n')}`
+  return `Revise la configuración de estos productos:\n${lineas.join('\n')}`
 }

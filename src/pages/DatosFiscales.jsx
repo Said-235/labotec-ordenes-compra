@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { getSafeErrorMessage } from '../lib/errors'
 import { validateDatosFiscales } from '../lib/validation'
@@ -18,6 +18,7 @@ export default function DatosFiscales() {
     direccion_envio: '',
   })
   const [fieldErrors, setFieldErrors] = useState({})
+  const [aceptaCondiciones, setAceptaCondiciones] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -56,10 +57,22 @@ export default function DatosFiscales() {
       return
     }
 
+    if (!aceptaCondiciones) {
+      setFieldErrors((prev) => ({
+        ...prev,
+        condiciones_comerciales: 'Debe aceptar las condiciones comerciales para continuar',
+      }))
+      return
+    }
+
     setSubmitting(true)
 
     try {
-      await completeDatosFiscales(sanitized)
+      await completeDatosFiscales({
+        ...sanitized,
+        condiciones_comerciales_aceptadas: true,
+        condiciones_comerciales_aceptadas_en: new Date().toISOString(),
+      })
     } catch (err) {
       setSubmitError(getSafeErrorMessage(err, 'No se pudieron guardar los datos fiscales'))
     } finally {
@@ -148,6 +161,35 @@ export default function DatosFiscales() {
               </div>
             ))}
 
+            <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={aceptaCondiciones}
+                  onChange={(e) => {
+                    setAceptaCondiciones(e.target.checked)
+                    setFieldErrors((prev) => ({ ...prev, condiciones_comerciales: undefined }))
+                  }}
+                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-labotec-teal focus:ring-labotec-teal/30"
+                />
+                <span className="text-sm text-gray-700">
+                  He leído y acepto las{' '}
+                  <Link
+                    to="/condiciones-comerciales"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-labotec-teal underline hover:text-labotec-teal-dark"
+                  >
+                    condiciones comerciales
+                  </Link>
+                  .
+                </span>
+              </label>
+              {fieldErrors.condiciones_comerciales && (
+                <p className="mt-2 text-xs text-red-600">{fieldErrors.condiciones_comerciales}</p>
+              )}
+            </div>
+
             {submitError && (
               <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
                 {submitError}
@@ -156,7 +198,7 @@ export default function DatosFiscales() {
 
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || !aceptaCondiciones}
               className="w-full rounded-lg bg-labotec-teal py-2.5 text-sm font-semibold text-white transition hover:bg-labotec-teal-dark disabled:cursor-not-allowed disabled:opacity-60"
             >
               {submitting ? 'Guardando…' : 'Continuar al catálogo'}

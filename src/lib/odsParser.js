@@ -163,8 +163,8 @@ function findHeaderRow(rows) {
   return null
 }
 
-function validateCategoria(categoria) {
-  if (!CATEGORIA_KEYS.includes(categoria)) {
+function validateCategoria(categoria, categoriaKeys) {
+  if (!categoriaKeys.includes(categoria)) {
     throw new Error('Categoría inválida')
   }
 }
@@ -185,8 +185,8 @@ function validateFile(file) {
 /**
  * Parsea un archivo ODS/XLSX y devuelve filas válidas + errores por fila.
  */
-export async function parseODSFile(file, categoria) {
-  validateCategoria(categoria)
+export async function parseODSFile(file, categoria, { categoriaKeys = CATEGORIA_KEYS } = {}) {
+  validateCategoria(categoria, categoriaKeys)
   validateFile(file)
 
   const buffer = await file.arrayBuffer()

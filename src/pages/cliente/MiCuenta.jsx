@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { getSafeErrorMessage } from '../../lib/errors'
 import { actualizarPerfilCliente } from '../../lib/perfil'
-import { NIVELES_CLIENTE } from '../../lib/constants'
 import { esEnvioIgualFiscal } from '../../lib/datosCliente'
 import { validatePerfilCliente } from '../../lib/validation'
 import DireccionEnvioFields from '../../components/DireccionEnvioFields'
@@ -99,12 +98,6 @@ export default function MiCuenta() {
         <p className="mt-1 text-sm text-gray-500">
           Actualice sus datos de contacto y fiscales
         </p>
-
-        {cliente && (
-          <p className="mt-2 text-xs text-gray-400">
-            Nivel {cliente.nivel} — {NIVELES_CLIENTE[cliente.nivel]}
-          </p>
-        )}
 
         <form onSubmit={handleSubmit} className="mt-8 space-y-8" noValidate>
           <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">

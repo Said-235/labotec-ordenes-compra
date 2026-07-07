@@ -1,10 +1,15 @@
 import { supabase } from '../supabaseClient'
-import { CATEGORIA_KEYS, MAX_CANTIDAD_CARRITO } from '../constants'
+import { MAX_CANTIDAD_CARRITO } from '../constants'
+import {
+  fetchCategoriasDesdeBd,
+  keysCategorias,
+  mapCategorias,
+} from '../categorias'
 import {
   mensajeViolacionesReactivo,
   validarRestriccionReactivo,
 } from '../cartValidation'
-import { calcularPrecioUnitario } from '../pricing'
+import { calcularPrecioLinea, calcularTotalesOrden, clavesReactivoEnItems } from '../pricing'
 
 function sanitizeCantidad(cantidad) {
   const qty = Math.floor(Number(cantidad) || 0)
@@ -41,7 +46,7 @@ export async function confirmarOrden(cartItems) {
 
   const { data: cliente, error: clienteError } = await supabase
     .from('clientes')
-    .select('id, nombre, email, nivel, datos_fiscales, activo, primer_login')
+    .select('id, nombre, email, porcentaje_descuento, datos_fiscales, activo, primer_login')
     .eq('id', user.id)
     .single()
 
@@ -57,17 +62,11 @@ export async function confirmarOrden(cartItems) {
     throw new Error('Complete sus datos fiscales antes de confirmar una orden')
   }
 
-  const { data: descuentoRow, error: descuentoError } = await supabase
-    .from('descuentos_nivel')
-    .select('porcentaje_descuento')
-    .eq('nivel', cliente.nivel)
-    .single()
+  const descuentoAplicado = Number(cliente.porcentaje_descuento ?? 0)
 
-  if (descuentoError) {
-    throw new Error('No se pudo obtener el descuento del cliente')
-  }
-
-  const descuentoAplicado = Number(descuentoRow.porcentaje_descuento ?? 0)
+  const categoriasRows = await fetchCategoriasDesdeBd(supabase, { soloActivas: true })
+  const categoriaKeys = keysCategorias(categoriasRows)
+  const categoriaMap = mapCategorias(categoriasRows)
 
   const itemsSanitized = cartItems.map((item) => {
     const cantidad = sanitizeCantidad(item.cantidad)
@@ -98,11 +97,14 @@ export async function confirmarOrden(cartItems) {
   }
 
   const productoMap = Object.fromEntries(productos.map((p) => [p.id, p]))
+  const clavesReactivo = clavesReactivoEnItems(
+    itemsSanitized.map(({ producto_id }) => productoMap[producto_id]),
+  )
 
   const lineas = itemsSanitized.map(({ producto_id, cantidad }) => {
     const producto = productoMap[producto_id]
     const precioBase = Number(producto.precio_base)
-    const precioUnitario = calcularPrecioUnitario(precioBase, descuentoAplicado)
+    const precioUnitario = calcularPrecioLinea(producto, descuentoAplicado, clavesReactivo)
     const subtotal = Math.round(precioUnitario * cantidad * 100) / 100
 
     return {
@@ -120,7 +122,7 @@ export async function confirmarOrden(cartItems) {
   })
 
   for (const linea of lineas) {
-    if (!CATEGORIA_KEYS.includes(linea.categoria)) {
+    if (!categoriaKeys.includes(linea.categoria)) {
       throw new Error('Categoría de producto inválida')
     }
   }
@@ -131,11 +133,15 @@ export async function confirmarOrden(cartItems) {
   }
 
   const porCategoria = groupByCategoria(lineas)
+  const categoriasOrdenadas = categoriaKeys.filter((cat) => porCategoria[cat])
   const ordenesCreadas = []
 
-  for (const [categoria, lineasCategoria] of Object.entries(porCategoria)) {
+  for (let i = 0; i < categoriasOrdenadas.length; i++) {
+    const categoria = categoriasOrdenadas[i]
+    const lineasCategoria = porCategoria[categoria]
     const subtotalOrden = lineasCategoria.reduce((sum, l) => sum + l.subtotal, 0)
-    const subtotalRedondeado = Math.round(subtotalOrden * 100) / 100
+    const incluirEnvio = i === 0
+    const { subtotal, total } = calcularTotalesOrden(subtotalOrden, { incluirEnvio })
 
     const { data: orden, error: ordenError } = await supabase
       .from('ordenes')
@@ -143,10 +149,10 @@ export async function confirmarOrden(cartItems) {
         cliente_id: cliente.id,
         categoria,
         status: 'pendiente',
-        nivel_cliente: cliente.nivel,
+        nivel_cliente: 0,
         descuento_aplicado: descuentoAplicado,
-        subtotal: subtotalRedondeado,
-        total: subtotalRedondeado,
+        subtotal,
+        total,
       })
       .select('*')
       .single()
@@ -178,6 +184,7 @@ export async function confirmarOrden(cartItems) {
       descripcion: l.descripcion,
       clase: l.clase,
       cantidad: l.cantidad,
+      precio_base_unitario: l.precio_base_unitario,
       precio_unitario: l.precio_unitario,
       subtotal: l.subtotal,
     }))
@@ -189,6 +196,7 @@ export async function confirmarOrden(cartItems) {
         detalles: detallesPdf,
         cliente,
         supabaseClient: supabase,
+        categoriaMap,
       })
 
       await supabase

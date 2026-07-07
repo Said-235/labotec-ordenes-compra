@@ -4,10 +4,12 @@ import {
   ERRORES_ADMIN_PRINCIPAL,
 } from './adminPrincipal'
 
-function validateNivel(nivel) {
-  const n = Number(nivel)
-  if (![1, 2, 3].includes(n)) throw new Error('Nivel inválido')
-  return n
+function validatePorcentajeDescuento(porcentaje) {
+  const pct = Number(porcentaje)
+  if (!Number.isFinite(pct) || pct < 0 || pct >= 100) {
+    throw new Error('Porcentaje inválido (0–99.99)')
+  }
+  return Math.round(pct * 100) / 100
 }
 
 function validatePassword(password) {
@@ -25,7 +27,7 @@ export async function listarClientes() {
 
   const { data, error } = await admin
     .from('clientes')
-    .select('id, nombre, email, nivel, primer_login, activo, creado_en, datos_fiscales')
+    .select('id, nombre, email, porcentaje_descuento, primer_login, activo, creado_en, datos_fiscales')
     .eq('es_admin', false)
     .order('nombre')
 
@@ -36,14 +38,14 @@ export async function listarClientes() {
 /**
  * Crea usuario en Auth + fila en clientes.
  */
-export async function crearCliente({ nombre, email, password, nivel }) {
+export async function crearCliente({ nombre, email, password, porcentaje_descuento = 0 }) {
   await assertAdminSession()
   const admin = getSupabaseAdmin()
 
   const cleanNombre = sanitizeText(nombre, 200)
   const cleanEmail = sanitizeText(email, 254).toLowerCase()
   const cleanPassword = validatePassword(password)
-  const cleanNivel = validateNivel(nivel)
+  const cleanDescuento = validatePorcentajeDescuento(porcentaje_descuento)
 
   if (!cleanNombre) throw new Error('El nombre es requerido')
   if (!isValidEmail(cleanEmail)) throw new Error('Formato de correo inválido')
@@ -66,7 +68,8 @@ export async function crearCliente({ nombre, email, password, nivel }) {
     nombre: cleanNombre,
     email: cleanEmail,
     es_admin: false,
-    nivel: cleanNivel,
+    nivel: 1,
+    porcentaje_descuento: cleanDescuento,
     primer_login: true,
     activo: true,
   })
@@ -80,9 +83,9 @@ export async function crearCliente({ nombre, email, password, nivel }) {
 }
 
 /**
- * Actualiza nombre y/o nivel del cliente.
+ * Actualiza nombre y/o descuento del cliente.
  */
-export async function actualizarCliente(clienteId, { nombre, nivel }) {
+export async function actualizarCliente(clienteId, { nombre, porcentaje_descuento }) {
   await assertAdminSession()
   const admin = getSupabaseAdmin()
 
@@ -108,8 +111,8 @@ export async function actualizarCliente(clienteId, { nombre, nivel }) {
     updates.nombre = cleanNombre
   }
 
-  if (nivel != null) {
-    updates.nivel = validateNivel(nivel)
+  if (porcentaje_descuento != null) {
+    updates.porcentaje_descuento = validatePorcentajeDescuento(porcentaje_descuento)
   }
 
   if (!Object.keys(updates).length) {
@@ -213,42 +216,4 @@ export async function restablecerPasswordCliente(clienteId, password) {
   })
 
   if (error) throw new Error('No se pudo restablecer la contraseña')
-}
-
-/**
- * Obtiene porcentajes de descuento por nivel.
- */
-export async function obtenerDescuentosNivel() {
-  await assertAdminSession()
-  const admin = getSupabaseAdmin()
-
-  const { data, error } = await admin
-    .from('descuentos_nivel')
-    .select('id, nivel, porcentaje_descuento')
-    .order('nivel')
-
-  if (error) throw new Error('No se pudieron cargar los descuentos')
-  return data ?? []
-}
-
-/**
- * Actualiza porcentaje de descuento de un nivel.
- */
-export async function actualizarDescuentoNivel(nivel, porcentaje) {
-  await assertAdminSession()
-  const admin = getSupabaseAdmin()
-
-  const cleanNivel = validateNivel(nivel)
-  const pct = Number(porcentaje)
-
-  if (!Number.isFinite(pct) || pct < 0 || pct >= 100) {
-    throw new Error('Porcentaje inválido (0–99.99)')
-  }
-
-  const { error } = await admin
-    .from('descuentos_nivel')
-    .update({ porcentaje_descuento: Math.round(pct * 100) / 100 })
-    .eq('nivel', cleanNivel)
-
-  if (error) throw new Error('No se pudo actualizar el descuento')
 }

@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from '../supabaseAdmin'
-import { CATEGORIAS } from '../constants'
+import { nombreCategoria } from '../categorias'
 import { sanitizeText } from '../validation'
 
 export const TIPOS_NOTIFICACION = {
@@ -8,7 +8,7 @@ export const TIPOS_NOTIFICACION = {
 }
 
 function etiquetaOrden(ordenId, categoria) {
-  const cat = CATEGORIAS[categoria] ?? categoria
+  const cat = nombreCategoria(categoria)
   const corto = String(ordenId).slice(0, 8).toUpperCase()
   return `${cat} · ${corto}`
 }
