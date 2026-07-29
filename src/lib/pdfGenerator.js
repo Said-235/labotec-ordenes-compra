@@ -1,10 +1,10 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import { fetchCategoriasDesdeBd, mapCategorias, nombreCategoria } from './categorias'
-import { ORDER_STATUS, SIGNED_URL_EXPIRY } from './constants'
-import { esEnvioIgualFiscal, getDireccionEnvio } from './datosCliente'
-import { getOrdenPdfPath } from './ordenes'
-import { formatMXN, getTotalesOrdenDesglose, esPrecioDobleSinReactivo, precioHabitualLinea } from './pricing'
+import { fetchCategoriasDesdeBd, mapCategorias, nombreCategoria } from './categorias.js'
+import { ORDER_STATUS, SIGNED_URL_EXPIRY } from './constants.js'
+import { esEnvioIgualFiscal, getDireccionEnvio } from './datosCliente.js'
+import { getOrdenPdfPath } from './ordenes.js'
+import { formatMXN, getTotalesOrdenDesglose, esPrecioDobleSinReactivo, precioHabitualLinea } from './pricing.js'
 
 function formatFecha(date = new Date()) {
   return new Intl.DateTimeFormat('es-MX', {
@@ -101,12 +101,12 @@ export function generateOrdenPDF({ orden, detalles, cliente, categoriaMap }) {
     y = addWrappedLine(doc, 'Dirección de envío', getDireccionEnvio(fiscal), 14, y)
   }
 
-  const descuentoAplicado = Number(orden.descuento_aplicado ?? 0)
+  const aumentosAplicados = orden.aumentos_aplicados ?? orden.descuento_aplicado ?? 0
 
   const tableBody = detalles.map((d) => {
-    const precioDoble = esPrecioDobleSinReactivo(d, descuentoAplicado)
+    const precioDoble = esPrecioDobleSinReactivo(d, aumentosAplicados)
     const condicion = precioDoble
-      ? `×2 sin Reactivo (hab. ${formatMXN(precioHabitualLinea(d, descuentoAplicado))})`
+      ? `×2 sin Reactivo (hab. ${formatMXN(precioHabitualLinea(d, aumentosAplicados))})`
       : '—'
 
     return [
@@ -120,7 +120,7 @@ export function generateOrdenPDF({ orden, detalles, cliente, categoriaMap }) {
     ]
   })
 
-  const hayPrecioDoble = detalles.some((d) => esPrecioDobleSinReactivo(d, descuentoAplicado))
+  const hayPrecioDoble = detalles.some((d) => esPrecioDobleSinReactivo(d, aumentosAplicados))
 
   autoTable(doc, {
     startY: y + 4,
@@ -230,6 +230,7 @@ export async function regenerarPdfOrden(ordenId, supabaseClient) {
       subtotal,
       total,
       descuento_aplicado,
+      aumentos_aplicados,
       creado_en,
       payment_confirmed_at,
       clientes (
@@ -277,7 +278,7 @@ export async function regenerarPdfOrden(ordenId, supabaseClient) {
   const categoriasRows = await fetchCategoriasDesdeBd(supabaseClient, { soloActivas: false })
   const categoriaMap = mapCategorias(categoriasRows)
 
-  const { signedUrl } = await generateAndUploadOrdenPDF({
+  const { path, signedUrl } = await generateAndUploadOrdenPDF({
     orden,
     detalles,
     cliente,
@@ -287,14 +288,14 @@ export async function regenerarPdfOrden(ordenId, supabaseClient) {
 
   const { error: updateError } = await supabaseClient
     .from('ordenes')
-    .update({ pdf_url: signedUrl })
+    .update({ pdf_url: path })
     .eq('id', ordenId)
 
   if (updateError) {
     throw new Error('No se pudo actualizar la URL del PDF')
   }
 
-  return { signedUrl }
+  return { signedUrl, path }
 }
 
 /**

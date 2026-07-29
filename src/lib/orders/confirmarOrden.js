@@ -9,7 +9,13 @@ import {
   mensajeViolacionesReactivo,
   validarRestriccionReactivo,
 } from '../cartValidation'
-import { calcularPrecioLinea, calcularTotalesOrden, clavesReactivoEnItems } from '../pricing'
+import {
+  calcularPrecioLinea,
+  calcularTotalesOrden,
+  clavesReactivoEnItems,
+  normalizarAumentosPorClase,
+  sanitizePorcentaje,
+} from '../pricing'
 
 function sanitizeCantidad(cantidad) {
   const qty = Math.floor(Number(cantidad) || 0)
@@ -46,7 +52,9 @@ export async function confirmarOrden(cartItems) {
 
   const { data: cliente, error: clienteError } = await supabase
     .from('clientes')
-    .select('id, nombre, email, porcentaje_descuento, datos_fiscales, activo, primer_login')
+    .select(
+      'id, nombre, email, nivel, porcentaje_aumento, aumentos_por_clase, datos_fiscales, activo, primer_login',
+    )
     .eq('id', user.id)
     .single()
 
@@ -62,7 +70,11 @@ export async function confirmarOrden(cartItems) {
     throw new Error('Complete sus datos fiscales antes de confirmar una orden')
   }
 
-  const descuentoAplicado = Number(cliente.porcentaje_descuento ?? 0)
+  const aumentosAplicados = normalizarAumentosPorClase(cliente)
+  // Legado: descuento_aplicado sigue siendo numérico (usamos Reactivo como referencia)
+  const aumentoAplicado = sanitizePorcentaje(aumentosAplicados.Reactivo)
+  // Snapshot legado: la BD aún exige nivel 1–3 (ya no afecta el precio)
+  const nivelSnapshot = [1, 2, 3].includes(Number(cliente.nivel)) ? Number(cliente.nivel) : 1
 
   const categoriasRows = await fetchCategoriasDesdeBd(supabase, { soloActivas: true })
   const categoriaKeys = keysCategorias(categoriasRows)
@@ -104,7 +116,7 @@ export async function confirmarOrden(cartItems) {
   const lineas = itemsSanitized.map(({ producto_id, cantidad }) => {
     const producto = productoMap[producto_id]
     const precioBase = Number(producto.precio_base)
-    const precioUnitario = calcularPrecioLinea(producto, descuentoAplicado, clavesReactivo)
+    const precioUnitario = calcularPrecioLinea(producto, aumentosAplicados, clavesReactivo)
     const subtotal = Math.round(precioUnitario * cantidad * 100) / 100
 
     return {
@@ -149,8 +161,9 @@ export async function confirmarOrden(cartItems) {
         cliente_id: cliente.id,
         categoria,
         status: 'pendiente',
-        nivel_cliente: 0,
-        descuento_aplicado: descuentoAplicado,
+        nivel_cliente: nivelSnapshot,
+        descuento_aplicado: aumentoAplicado,
+        aumentos_aplicados: aumentosAplicados,
         subtotal,
         total,
       })
@@ -158,6 +171,15 @@ export async function confirmarOrden(cartItems) {
       .single()
 
     if (ordenError || !orden) {
+      const detalle = ordenError?.message ?? ordenError?.details ?? ''
+      if (detalle.includes('ordenes_categoria_check') || detalle.includes('categoria_check')) {
+        throw new Error(
+          'La categoría de la orden no está permitida en la base de datos. Ejecute la migración SQL de categorías.',
+        )
+      }
+      if (detalle.includes('nivel')) {
+        throw new Error('No se pudo crear la orden por una restricción de nivel de cliente')
+      }
       throw new Error('No se pudo crear la orden')
     }
 
@@ -191,7 +213,7 @@ export async function confirmarOrden(cartItems) {
 
     try {
       const { generateAndUploadOrdenPDF } = await import('../pdfGenerator')
-      const { signedUrl } = await generateAndUploadOrdenPDF({
+      const { path, signedUrl } = await generateAndUploadOrdenPDF({
         orden,
         detalles: detallesPdf,
         cliente,
@@ -201,10 +223,10 @@ export async function confirmarOrden(cartItems) {
 
       await supabase
         .from('ordenes')
-        .update({ pdf_url: signedUrl })
+        .update({ pdf_url: path })
         .eq('id', orden.id)
 
-      ordenesCreadas.push({ ...orden, pdf_url: signedUrl })
+      ordenesCreadas.push({ ...orden, pdf_url: path, pdf_signed_url: signedUrl })
     } catch {
       ordenesCreadas.push(orden)
     }

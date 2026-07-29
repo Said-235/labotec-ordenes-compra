@@ -1,5 +1,5 @@
-import { CLASES_REQUIEREN_REACTIVO } from './cartValidation'
-import { sanitizeText } from './validation'
+import { CLASES_REQUIEREN_REACTIVO } from './cartValidation.js'
+import { sanitizeText } from './validation.js'
 
 export const CLASES_CON_GRUPO = ['Reactivo', ...CLASES_REQUIEREN_REACTIVO]
 

@@ -1,4 +1,5 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabaseClient'
 import {
   getCategoriasFallback,
@@ -22,32 +23,51 @@ async function fetchCategorias(soloActivas) {
 
   const { data, error } = await query
 
-  if (error || !data?.length) {
-    return getCategoriasFallback()
+  if (error) {
+    throw error
   }
 
-  return data
+  return data ?? []
 }
 
-export function CategoriasProvider({ children, soloActivas = false }) {
+export function CategoriasProvider({ children, soloActivas = true }) {
+  const { loading: authLoading, isAuthenticated } = useAuth()
   const [rows, setRows] = useState(getCategoriasFallback())
   const [loading, setLoading] = useState(true)
+  const fromDbRef = useRef(false)
 
   const cargar = useCallback(async () => {
     setLoading(true)
     try {
       const data = await fetchCategorias(soloActivas)
-      setRows(data)
+      if (data.length) {
+        setRows(data)
+        fromDbRef.current = true
+      } else if (!fromDbRef.current) {
+        setRows(getCategoriasFallback())
+      }
     } catch {
-      setRows(getCategoriasFallback())
+      if (!fromDbRef.current) {
+        setRows(getCategoriasFallback())
+      }
     } finally {
       setLoading(false)
     }
   }, [soloActivas])
 
+  // Esperar sesión: sin JWT la RLS bloquea y se usaba el fallback de 3 categorías.
   useEffect(() => {
+    if (authLoading) return
+
+    if (!isAuthenticated) {
+      setRows(getCategoriasFallback())
+      fromDbRef.current = false
+      setLoading(false)
+      return
+    }
+
     cargar()
-  }, [cargar])
+  }, [authLoading, isAuthenticated, cargar])
 
   const categoriaMap = useMemo(() => mapCategorias(rows), [rows])
   const categoriaKeys = useMemo(() => keysCategorias(rows), [rows])
@@ -57,11 +77,11 @@ export function CategoriasProvider({ children, soloActivas = false }) {
       categorias: rows,
       categoriaMap,
       categoriaKeys,
-      loading,
+      loading: authLoading || loading,
       refreshCategorias: cargar,
       getNombreCategoria: (clave) => nombreCategoria(clave, categoriaMap),
     }),
-    [rows, categoriaMap, categoriaKeys, loading, cargar],
+    [rows, categoriaMap, categoriaKeys, authLoading, loading, cargar],
   )
 
   return <CategoriasContext.Provider value={value}>{children}</CategoriasContext.Provider>

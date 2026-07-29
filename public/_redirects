@@ -1,0 +1,5 @@
+# Prioridad: API admin → Function (no HTML del SPA)
+/api/admin  /.netlify/functions/admin  200!
+
+# SPA
+/*    /index.html   200

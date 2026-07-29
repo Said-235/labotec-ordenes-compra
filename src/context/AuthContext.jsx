@@ -1,18 +1,24 @@
 import { createContext, useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { getSafeErrorMessage } from '../lib/errors'
+import { normalizarAumentosPorClase } from '../lib/pricing'
 
 export const AuthContext = createContext(null)
 
 async function fetchClienteProfile(userId) {
   const { data, error } = await supabase
     .from('clientes')
-    .select('id, nombre, email, es_admin, porcentaje_descuento, primer_login, datos_fiscales, activo')
+    .select(
+      'id, nombre, email, es_admin, porcentaje_aumento, aumentos_por_clase, primer_login, datos_fiscales, activo',
+    )
     .eq('id', userId)
     .single()
 
   if (error) throw new Error('No se pudo cargar su perfil de usuario')
-  return data
+  return {
+    ...data,
+    aumentos_por_clase: normalizarAumentosPorClase(data),
+  }
 }
 
 export function AuthProvider({ children }) {

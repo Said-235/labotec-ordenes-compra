@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getSafeErrorMessage } from '../../lib/errors'
-import { assertAdminSession, getSupabaseAdmin } from '../../lib/supabaseAdmin'
+import { callAdmin } from '../../lib/adminApi'
 
 const cards = [
   {
     to: '/admin/clientes',
     title: 'Clientes',
-    description: 'Crear cuentas y asignar el descuento de cada cliente',
+    description: 'Crear cuentas y asignar el aumento de precio de cada cliente',
   },
   {
     to: '/admin/categorias',
@@ -37,22 +37,7 @@ const cards = [
 ]
 
 async function fetchStats() {
-  await assertAdminSession()
-  const admin = getSupabaseAdmin()
-
-  const [clientes, productos, ordenesPendientes, comprobantesPendientes] = await Promise.all([
-    admin.from('clientes').select('id', { count: 'exact', head: true }).eq('es_admin', false).eq('activo', true),
-    admin.from('productos').select('id', { count: 'exact', head: true }).eq('activo', true),
-    admin.from('ordenes').select('id', { count: 'exact', head: true }).eq('status', 'pendiente'),
-    admin.from('comprobantes').select('id', { count: 'exact', head: true }).eq('validado', false).eq('rechazado', false),
-  ])
-
-  return {
-    clientes: clientes.count ?? 0,
-    productos: productos.count ?? 0,
-    ordenesPendientes: ordenesPendientes.count ?? 0,
-    comprobantesPendientes: comprobantesPendientes.count ?? 0,
-  }
+  return callAdmin('dashboard.stats')
 }
 
 export default function Dashboard() {
@@ -66,7 +51,7 @@ export default function Dashboard() {
   }, [])
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       <h1 className="text-2xl font-bold text-gray-900">Panel de administración</h1>
       <p className="mt-2 text-gray-500">Gestión de Labotec Supply</p>
 

@@ -1,19 +1,31 @@
 import { useCallback, useEffect, useState } from 'react'
+import ConfirmacionModal from '../../components/ConfirmacionModal'
 import {
   actualizarCliente,
   crearCliente,
   desactivarCliente,
+  eliminarCliente,
   listarClientes,
   reactivarCliente,
   restablecerPasswordCliente,
 } from '../../lib/admin/clientes'
+import { CLASES_PRODUCTO } from '../../lib/constants'
 import { getSafeErrorMessage } from '../../lib/errors'
+import { aumentosPorClaseVacios, normalizarAumentosPorClase } from '../../lib/pricing'
+
+const CLASES_CORTAS = {
+  Reactivo: 'React.',
+  Calibrador: 'Calib.',
+  Control: 'Ctrl.',
+  Consumible: 'Cons.',
+  MCC: 'MCC',
+}
 
 function Modal({ open, onClose, title, children }) {
   if (!open) return null
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl bg-white p-6 shadow-xl">
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
           <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600">
@@ -34,14 +46,16 @@ export default function Clientes() {
 
   const [modalCrear, setModalCrear] = useState(false)
   const [modalPassword, setModalPassword] = useState(null)
+  const [confirmarEliminar, setConfirmarEliminar] = useState(null)
   const [formCrear, setFormCrear] = useState({
     nombre: '',
     email: '',
     password: '',
-    porcentaje_descuento: '0',
+    aumentos_por_clase: aumentosPorClaseVacios(),
   })
   const [passwordNueva, setPasswordNueva] = useState('')
   const [guardando, setGuardando] = useState(false)
+  const [eliminando, setEliminando] = useState(false)
 
   const cargar = useCallback(async () => {
     setLoading(true)
@@ -71,11 +85,18 @@ export default function Clientes() {
     setError('')
     try {
       await crearCliente({
-        ...formCrear,
-        porcentaje_descuento: Number(formCrear.porcentaje_descuento),
+        nombre: formCrear.nombre,
+        email: formCrear.email,
+        password: formCrear.password,
+        aumentos_por_clase: formCrear.aumentos_por_clase,
       })
       setModalCrear(false)
-      setFormCrear({ nombre: '', email: '', password: '', porcentaje_descuento: '0' })
+      setFormCrear({
+        nombre: '',
+        email: '',
+        password: '',
+        aumentos_por_clase: aumentosPorClaseVacios(),
+      })
       flash('Cliente creado correctamente')
       await cargar()
     } catch (err) {
@@ -85,14 +106,14 @@ export default function Clientes() {
     }
   }
 
-  async function handleCambioDescuento(clienteId, valor) {
+  async function handleCambioAumentos(clienteId, aumentos) {
     setError('')
     try {
-      await actualizarCliente(clienteId, { porcentaje_descuento: Number(valor) })
-      flash('Descuento actualizado')
+      await actualizarCliente(clienteId, { aumentos_por_clase: aumentos })
+      flash('Aumentos actualizados')
       await cargar()
     } catch (err) {
-      setError(getSafeErrorMessage(err, 'No se pudo actualizar el descuento'))
+      setError(getSafeErrorMessage(err, 'No se pudieron actualizar los aumentos'))
     }
   }
 
@@ -109,6 +130,22 @@ export default function Clientes() {
       await cargar()
     } catch (err) {
       setError(getSafeErrorMessage(err, 'No se pudo cambiar el estado'))
+    }
+  }
+
+  async function handleEliminarCliente() {
+    if (!confirmarEliminar) return
+    setEliminando(true)
+    setError('')
+    try {
+      await eliminarCliente(confirmarEliminar.id)
+      setConfirmarEliminar(null)
+      flash('Cliente eliminado')
+      await cargar()
+    } catch (err) {
+      setError(getSafeErrorMessage(err, 'No se pudo eliminar el cliente'))
+    } finally {
+      setEliminando(false)
     }
   }
 
@@ -130,12 +167,12 @@ export default function Clientes() {
   }
 
   return (
-    <div className="p-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+    <div className="p-4 sm:p-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Clientes</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Crear cuentas y asignar el descuento de cada cliente
+            Crear cuentas y asignar el aumento de precio por clase de producto
           </p>
         </div>
         <button
@@ -165,8 +202,9 @@ export default function Clientes() {
               <tr>
                 <th className="px-4 py-3">Nombre</th>
                 <th className="px-4 py-3">Email</th>
-                <th className="px-4 py-3">Descuento</th>
+                <th className="px-4 py-3">Aumentos por clase (%)</th>
                 <th className="px-4 py-3">Estado</th>
+                <th className="px-4 py-3">Órdenes</th>
                 <th className="px-4 py-3">Datos fiscales</th>
                 <th className="px-4 py-3">Acciones</th>
               </tr>
@@ -174,7 +212,7 @@ export default function Clientes() {
             <tbody className="divide-y divide-gray-100">
               {clientes.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
                     No hay clientes registrados
                   </td>
                 </tr>
@@ -184,10 +222,11 @@ export default function Clientes() {
                     <td className="px-4 py-3 font-medium">{c.nombre}</td>
                     <td className="px-4 py-3 text-gray-600">{c.email}</td>
                     <td className="px-4 py-3">
-                      <DescuentoInput
-                        valor={c.porcentaje_descuento ?? 0}
+                      <AumentosPorClaseEditor
+                        valor={normalizarAumentosPorClase(c)}
                         disabled={!c.activo}
-                        onSave={(valor) => handleCambioDescuento(c.id, valor)}
+                        onSave={(aumentos) => handleCambioAumentos(c.id, aumentos)}
+                        compact
                       />
                     </td>
                     <td className="px-4 py-3">
@@ -200,6 +239,15 @@ export default function Clientes() {
                       >
                         {c.activo ? 'Activo' : 'Inactivo'}
                       </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {c.tiene_ordenes_pendientes ? (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                          Pendientes
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-400">Sin pendientes</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-500">
                       {c.primer_login ? 'Pendiente' : 'Completados'}
@@ -217,10 +265,17 @@ export default function Clientes() {
                           type="button"
                           onClick={() => handleToggleActivo(c)}
                           className={`text-xs hover:underline ${
-                            c.activo ? 'text-red-600' : 'text-green-600'
+                            c.activo ? 'text-amber-700' : 'text-green-600'
                           }`}
                         >
                           {c.activo ? 'Desactivar' : 'Reactivar'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmarEliminar(c)}
+                          className="text-xs text-red-600 hover:underline"
+                        >
+                          Eliminar
                         </button>
                       </div>
                     </td>
@@ -255,16 +310,20 @@ export default function Clientes() {
             required
             hint="Mínimo 8 caracteres. El cliente debería cambiarla."
           />
-          <Field
-            label="Descuento (%)"
-            type="number"
-            min={0}
-            max={99.99}
-            step={0.01}
-            value={formCrear.porcentaje_descuento}
-            onChange={(v) => setFormCrear((f) => ({ ...f, porcentaje_descuento: v }))}
-            hint="Porcentaje aplicado al precio base de cada producto."
-          />
+          <div>
+            <p className="mb-2 text-sm font-medium text-gray-700">
+              Aumento sobre precio base por clase (%)
+            </p>
+            <AumentosPorClaseEditor
+              valor={formCrear.aumentos_por_clase}
+              onChange={(aumentos) =>
+                setFormCrear((f) => ({ ...f, aumentos_por_clase: aumentos }))
+              }
+            />
+            <p className="mt-1 text-xs text-gray-400">
+              Ej. Reactivo 10 y Calibrador 25 → cada clase usa su propio %.
+            </p>
+          </div>
           <button
             type="submit"
             disabled={guardando}
@@ -274,6 +333,20 @@ export default function Clientes() {
           </button>
         </form>
       </Modal>
+
+      <ConfirmacionModal
+        titulo="Eliminar cliente"
+        mensaje={
+          confirmarEliminar
+            ? `Se eliminará permanentemente a «${confirmarEliminar.nombre}» (${confirmarEliminar.email}) y su cuenta de acceso.\n\nSolo es posible si no tiene órdenes. Si las tiene, desactívelo en su lugar.`
+            : null
+        }
+        onConfirmar={handleEliminarCliente}
+        onCancelar={() => setConfirmarEliminar(null)}
+        confirmarTexto="Eliminar"
+        confirmando={eliminando}
+        confirmandoTexto="Eliminando…"
+      />
 
       <Modal
         open={Boolean(modalPassword)}
@@ -324,35 +397,58 @@ function Field({ label, value, onChange, type = 'text', required, hint, min, max
   )
 }
 
-function DescuentoInput({ valor, onSave, disabled }) {
-  const [local, setLocal] = useState(String(valor))
+function AumentosPorClaseEditor({ valor, onSave, onChange, disabled, compact = false }) {
+  const [local, setLocal] = useState(() => normalizarAumentosPorClase(valor))
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    setLocal(String(valor))
+    setLocal(normalizarAumentosPorClase(valor))
   }, [valor])
 
+  function updateClase(clase, raw) {
+    const next = { ...local, [clase]: raw }
+    setLocal(next)
+    onChange?.(normalizarAumentosPorClase(next))
+  }
+
   async function handleBlur() {
-    if (disabled || Number(local) === Number(valor)) return
+    if (!onSave || disabled) return
+    const normalizado = normalizarAumentosPorClase(local)
+    const actual = normalizarAumentosPorClase(valor)
+    const cambio = CLASES_PRODUCTO.some(
+      (clase) => Number(normalizado[clase]) !== Number(actual[clase]),
+    )
+    if (!cambio) return
     setSaving(true)
-    await onSave(local)
+    await onSave(normalizado)
     setSaving(false)
   }
 
   return (
-    <div className="flex items-center gap-1">
-      <input
-        type="number"
-        min={0}
-        max={99.99}
-        step={0.01}
-        value={local}
-        onChange={(e) => setLocal(e.target.value)}
-        onBlur={handleBlur}
-        disabled={disabled || saving}
-        className="w-20 rounded border border-gray-300 px-2 py-1 text-sm disabled:cursor-not-allowed"
-      />
-      <span className="text-sm text-gray-500">%</span>
+    <div className={compact ? 'flex flex-wrap gap-2' : 'grid grid-cols-2 gap-3 sm:grid-cols-3'}>
+      {CLASES_PRODUCTO.map((clase) => (
+        <label key={clase} className="flex flex-col gap-0.5">
+          <span className="text-[10px] font-medium uppercase tracking-wide text-gray-500">
+            {compact ? CLASES_CORTAS[clase] : clase}
+          </span>
+          <div className="flex items-center gap-1">
+            <input
+              type="number"
+              min={0}
+              max={999.99}
+              step={0.01}
+              value={local[clase]}
+              onChange={(e) => updateClase(clase, e.target.value)}
+              onBlur={handleBlur}
+              disabled={disabled || saving}
+              className={`rounded border border-gray-300 px-2 py-1 text-sm disabled:cursor-not-allowed ${
+                compact ? 'w-16' : 'w-full'
+              }`}
+            />
+            {!compact && <span className="text-sm text-gray-500">%</span>}
+          </div>
+        </label>
+      ))}
     </div>
   )
 }

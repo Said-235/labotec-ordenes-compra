@@ -6,6 +6,7 @@ export default function ConfirmacionModal({
   confirmarTexto = 'Confirmar y agregar',
   cancelarTexto = 'Cancelar',
   confirmando = false,
+  confirmandoTexto = 'Procesando…',
 }) {
   if (!mensaje) return null
 
@@ -23,7 +24,7 @@ export default function ConfirmacionModal({
         <p id="confirmacion-mensaje" className="mt-3 text-sm text-gray-600 whitespace-pre-line">
           {mensaje}
         </p>
-        <div className="mt-6 flex gap-3">
+        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row">
           <button
             type="button"
             onClick={onCancelar}
@@ -38,7 +39,7 @@ export default function ConfirmacionModal({
             disabled={confirmando}
             className="flex-1 rounded-lg bg-labotec-teal py-2.5 text-sm font-semibold text-white hover:bg-labotec-teal-dark disabled:opacity-60"
           >
-            {confirmando ? 'Agregando…' : confirmarTexto}
+            {confirmando ? confirmandoTexto : confirmarTexto}
           </button>
         </div>
       </div>

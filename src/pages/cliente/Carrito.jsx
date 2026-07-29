@@ -1,9 +1,16 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import AvisoCorteBanner from '../../components/AvisoCorteBanner'
+import ConfirmacionModal from '../../components/ConfirmacionModal'
 import { useCarrito } from '../../hooks/useCarrito'
 import { useCategorias } from '../../hooks/useCategorias'
 import { getSafeErrorMessage } from '../../lib/errors'
 import { mensajeViolacionesReactivo } from '../../lib/cartValidation'
+import {
+  esVentanaMantenimientoCorte,
+  getMensajeAvisoCorte,
+  getResumenAvisoCorte,
+} from '../../lib/cortePedidos'
 import { confirmarOrden } from '../../lib/orders/confirmarOrden'
 import { formatMXN } from '../../lib/pricing'
 
@@ -22,6 +29,9 @@ export default function Carrito() {
   const [error, setError] = useState('')
   const [ordenesCreadas, setOrdenesCreadas] = useState(null)
   const [mensajeItem, setMensajeItem] = useState('')
+  const [avisoCortePendiente, setAvisoCortePendiente] = useState(false)
+  const avisoCorteActivo = esVentanaMantenimientoCorte()
+  const mensajeCorte = getMensajeAvisoCorte()
 
   const porCategoria = items.reduce((acc, item) => {
     if (!acc[item.categoria]) acc[item.categoria] = []
@@ -29,7 +39,7 @@ export default function Carrito() {
     return acc
   }, {})
 
-  async function handleConfirmar() {
+  function handleConfirmarClick() {
     setError('')
     setMensajeItem('')
 
@@ -42,7 +52,18 @@ export default function Carrito() {
       return
     }
 
+    if (avisoCorteActivo) {
+      setAvisoCortePendiente(true)
+      return
+    }
+
+    confirmarPedido()
+  }
+
+  async function confirmarPedido() {
+    setAvisoCortePendiente(false)
     setConfirmando(true)
+    setError('')
 
     try {
       const ordenes = await confirmarOrden(items)
@@ -75,6 +96,11 @@ export default function Carrito() {
           <p className="mt-2 text-sm text-green-800">
             Se generaron {ordenesCreadas.length} orden(es), una por categoría.
           </p>
+          {getResumenAvisoCorte() && (
+            <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+              {getResumenAvisoCorte()}
+            </p>
+          )}
           <p className="mt-3 text-sm text-green-900">
             Para completar el pago, diríjase a{' '}
             <span className="font-medium">Mis órdenes</span> y cargue su comprobante de pago
@@ -92,9 +118,9 @@ export default function Carrito() {
                   {getNombreCategoria(orden.categoria)} — {formatMXN(orden.total)}
                 </p>
                 <p className="mt-1 text-xs text-gray-500 font-mono">{orden.id}</p>
-                {orden.pdf_url && (
+                {(orden.pdf_signed_url || orden.pdf_url) && (
                   <a
-                    href={orden.pdf_url}
+                    href={orden.pdf_signed_url || orden.pdf_url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="mt-2 inline-block text-labotec-teal hover:underline"
@@ -126,13 +152,27 @@ export default function Carrito() {
   }
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       <h1 className="text-2xl font-bold text-gray-900">Carrito</h1>
       <p className="mt-1 text-sm text-gray-500">
         {items.length === 0
           ? 'Su carrito está vacío'
           : `${items.length} producto(s) — se generará una orden por categoría`}
       </p>
+
+      <div className="mt-4">
+        <AvisoCorteBanner />
+      </div>
+
+      <ConfirmacionModal
+        titulo="Procesamiento en el siguiente corte"
+        mensaje={avisoCortePendiente ? mensajeCorte : null}
+        onConfirmar={confirmarPedido}
+        onCancelar={() => setAvisoCortePendiente(false)}
+        confirmarTexto="Entendido, confirmar"
+        cancelarTexto="Volver"
+        confirmando={confirmando}
+      />
 
       {items.length === 0 ? (
         <div className="mt-8 text-center">
@@ -222,23 +262,23 @@ export default function Carrito() {
             </div>
           )}
 
-          <div className="mt-6 flex items-center justify-between">
+          <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
             <button
               type="button"
               onClick={() => {
                 vaciarCarrito()
                 setMensajeItem('')
               }}
-              className="text-sm text-gray-500 hover:text-gray-800"
+              className="text-center text-sm text-gray-500 hover:text-gray-800 sm:text-left"
             >
               Vaciar carrito
             </button>
 
             <button
               type="button"
-              onClick={handleConfirmar}
+              onClick={handleConfirmarClick}
               disabled={!esValido || confirmando}
-              className="rounded-lg bg-labotec-teal px-6 py-2.5 text-sm font-semibold text-white hover:bg-labotec-teal-dark disabled:cursor-not-allowed disabled:opacity-50"
+              className="w-full rounded-lg bg-labotec-teal px-6 py-2.5 text-sm font-semibold text-white hover:bg-labotec-teal-dark disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
             >
               {confirmando ? 'Confirmando…' : 'Confirmar orden'}
             </button>

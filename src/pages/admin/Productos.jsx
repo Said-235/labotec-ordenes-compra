@@ -214,8 +214,8 @@ export default function Productos() {
     productosFiltrados.length > 0 && seleccionados.size === productosFiltrados.length
 
   return (
-    <div className="p-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+    <div className="p-4 sm:p-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Productos</h1>
           <p className="mt-1 text-sm text-gray-500">
@@ -434,7 +434,7 @@ export default function Productos() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">Clase</label>
               <select

@@ -6,12 +6,12 @@ import {
 import OrdenTotalesResumen from './OrdenTotalesResumen'
 
 export default function DetalleOrdenTabla({ orden }) {
-  const descuento = Number(orden.descuento_aplicado ?? 0)
+  const aumentos = orden.aumentos_aplicados ?? orden.descuento_aplicado ?? 0
   const lineas = orden.detalle_orden ?? []
 
   if (!lineas.length) return null
 
-  const hayPrecioDoble = lineas.some((d) => esPrecioDobleSinReactivo(d, descuento))
+  const hayPrecioDoble = lineas.some((d) => esPrecioDobleSinReactivo(d, aumentos))
 
   return (
     <div className="mt-4 overflow-x-auto">
@@ -27,8 +27,8 @@ export default function DetalleOrdenTabla({ orden }) {
         </thead>
         <tbody>
           {lineas.map((d) => {
-            const precioDoble = esPrecioDobleSinReactivo(d, descuento)
-            const precioNormal = precioHabitualLinea(d, descuento)
+            const precioDoble = esPrecioDobleSinReactivo(d, aumentos)
+            const precioNormal = precioHabitualLinea(d, aumentos)
 
             return (
               <tr key={d.id} className="border-t border-gray-100 align-top">

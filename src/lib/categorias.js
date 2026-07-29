@@ -1,5 +1,5 @@
-import { CATEGORIAS as CATEGORIAS_DEFAULT } from './constants'
-import { sanitizeText } from './validation'
+import { CATEGORIAS as CATEGORIAS_DEFAULT } from './constants.js'
+import { sanitizeText } from './validation.js'
 
 export function slugifyCategoria(nombre) {
   return sanitizeText(nombre, 80)

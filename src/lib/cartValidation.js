@@ -1,5 +1,5 @@
-import { sanitizeText } from './validation'
-import { MULTIPLICADOR_PRECIO_SIN_REACTIVO } from './constants'
+import { sanitizeText } from './validation.js'
+import { MULTIPLICADOR_PRECIO_SIN_REACTIVO } from './constants.js'
 
 export const CLASES_REQUIEREN_REACTIVO = ['Calibrador', 'Control']
 

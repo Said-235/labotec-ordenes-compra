@@ -58,7 +58,7 @@ const EXACT_USER_MESSAGES = new Set([
   'El archivo no contiene filas válidas para procesar',
   'El carrito está vacío',
   'Complete sus datos fiscales antes de confirmar una orden',
-  'No se pudo obtener el descuento del cliente',
+  'No se pudo obtener el aumento del cliente',
   'Cantidad inválida en el carrito',
   'No se pudieron validar los productos',
   'Algunos productos del carrito ya no existen',

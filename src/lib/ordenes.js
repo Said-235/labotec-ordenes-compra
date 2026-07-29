@@ -18,7 +18,11 @@ export async function getOrdenPdfUrl(orden, clienteId) {
     .from('documentos')
     .createSignedUrl(path, SIGNED_URL_EXPIRY)
 
-  if (error || !data?.signedUrl) return orden.pdf_url ?? null
+  if (error || !data?.signedUrl) {
+    // Compatibilidad: órdenes antiguas con URL firmada larga en pdf_url
+    if (orden.pdf_url?.startsWith('http')) return orden.pdf_url
+    return null
+  }
   return data.signedUrl
 }
 
@@ -41,6 +45,7 @@ export async function obtenerMisOrdenes() {
       status,
       nivel_cliente,
       descuento_aplicado,
+      aumentos_aplicados,
       subtotal,
       total,
       pdf_url,

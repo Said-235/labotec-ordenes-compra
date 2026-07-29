@@ -46,4 +46,4 @@ export const ALLOWED_COMPROBANTE_TYPES = [
 
 export const ALLOWED_COMPROBANTE_EXTENSIONS = ['.pdf', '.jpg', '.jpeg', '.png']
 
-export const SIGNED_URL_EXPIRY = 60 * 60 * 24 * 7
+export const SIGNED_URL_EXPIRY = 60 * 60

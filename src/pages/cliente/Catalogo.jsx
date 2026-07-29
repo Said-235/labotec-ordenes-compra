@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import ConfirmacionModal from '../../components/ConfirmacionModal'
 import AlertaModal from '../../components/AlertaModal'
+import AvisoCorteBanner from '../../components/AvisoCorteBanner'
 import { useAuth } from '../../hooks/useAuth'
 import { useCarrito } from '../../hooks/useCarrito'
 import { useCategorias } from '../../hooks/useCategorias'
@@ -8,7 +9,7 @@ import { supabase } from '../../lib/supabaseClient'
 import { MULTIPLICADOR_PRECIO_SIN_REACTIVO } from '../../lib/constants'
 import { mensajeConfirmacionPrecioDoble } from '../../lib/cartValidation'
 import { getSafeErrorMessage } from '../../lib/errors'
-import { calcularPrecioUnitario, formatMXN } from '../../lib/pricing'
+import { calcularPrecioUnitario, formatMXN, resolverAumento } from '../../lib/pricing'
 import { sanitizeText } from '../../lib/validation'
 
 export default function Catalogo() {
@@ -25,7 +26,7 @@ export default function Catalogo() {
   const [alertaCarrito, setAlertaCarrito] = useState(null)
   const [confirmacionCarrito, setConfirmacionCarrito] = useState(null)
 
-  const descuento = Number(cliente?.porcentaje_descuento ?? 0)
+  const aumentos = cliente?.aumentos_por_clase ?? cliente
 
   useEffect(() => {
     if (categoriaKeys.length && !categoriaKeys.includes(categoria)) {
@@ -93,7 +94,10 @@ export default function Catalogo() {
     }
 
     if (result.requiresConfirmacion) {
-      const precioNormal = calcularPrecioUnitario(producto.precio_base, descuento)
+      const precioNormal = calcularPrecioUnitario(
+        producto.precio_base,
+        resolverAumento(aumentos, producto.clase),
+      )
       const precioDoble =
         Math.round(precioNormal * MULTIPLICADOR_PRECIO_SIN_REACTIVO * 100) / 100
       setConfirmacionCarrito({
@@ -127,12 +131,16 @@ export default function Catalogo() {
   }
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Catálogo</h1>
           <p className="mt-1 text-sm text-gray-500">Productos disponibles para su cuenta</p>
         </div>
+      </div>
+
+      <div className="mt-4">
+        <AvisoCorteBanner />
       </div>
 
       {toast && (
@@ -161,21 +169,23 @@ export default function Catalogo() {
       />
 
       <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-        <div className="flex rounded-lg border border-gray-200 bg-white p-1">
-          {categoriaKeys.map((key) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setCategoria(key)}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
-                categoria === key
-                  ? 'bg-labotec-teal text-white'
-                  : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              {categoriaMap[key]}
-            </button>
-          ))}
+        <div className="max-w-full overflow-x-auto">
+          <div className="flex w-max min-w-full rounded-lg border border-gray-200 bg-white p-1">
+            {categoriaKeys.map((key) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setCategoria(key)}
+                className={`shrink-0 rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition ${
+                  categoria === key
+                    ? 'bg-labotec-teal text-white'
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                {categoriaMap[key]}
+              </button>
+            ))}
+          </div>
         </div>
 
         <input
@@ -226,7 +236,10 @@ export default function Catalogo() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {productosFiltrados.map((producto) => {
-                const precioFinal = calcularPrecioUnitario(producto.precio_base, descuento)
+                const precioFinal = calcularPrecioUnitario(
+                  producto.precio_base,
+                  resolverAumento(aumentos, producto.clase),
+                )
 
                 return (
                   <tr key={producto.id} className="hover:bg-gray-50">
