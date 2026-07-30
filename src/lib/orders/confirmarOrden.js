@@ -10,9 +10,8 @@ import {
   validarRestriccionReactivo,
 } from '../cartValidation'
 import {
-  calcularPrecioLinea,
+  expandirLineasConCoberturaReactivo,
   calcularTotalesOrden,
-  clavesReactivoEnItems,
   normalizarAumentosPorClase,
   sanitizePorcentaje,
 } from '../pricing'
@@ -109,29 +108,28 @@ export async function confirmarOrden(cartItems) {
   }
 
   const productoMap = Object.fromEntries(productos.map((p) => [p.id, p]))
-  const clavesReactivo = clavesReactivoEnItems(
-    itemsSanitized.map(({ producto_id }) => productoMap[producto_id]),
+
+  const lineasInput = itemsSanitized.map(({ producto_id, cantidad }) => ({
+    producto: productoMap[producto_id],
+    cantidad,
+  }))
+  const lineasExpandidas = expandirLineasConCoberturaReactivo(
+    lineasInput,
+    aumentosAplicados,
   )
 
-  const lineas = itemsSanitized.map(({ producto_id, cantidad }) => {
-    const producto = productoMap[producto_id]
-    const precioBase = Number(producto.precio_base)
-    const precioUnitario = calcularPrecioLinea(producto, aumentosAplicados, clavesReactivo)
-    const subtotal = Math.round(precioUnitario * cantidad * 100) / 100
-
-    return {
-      producto_id,
-      codigo: producto.codigo,
-      descripcion: producto.descripcion,
-      clase: producto.clase,
-      categoria: producto.categoria,
-      grupo_prueba: producto.grupo_prueba ?? null,
-      cantidad,
-      precio_base_unitario: precioBase,
-      precio_unitario: precioUnitario,
-      subtotal,
-    }
-  })
+  const lineas = lineasExpandidas.map((linea) => ({
+    producto_id: linea.producto.id,
+    codigo: linea.producto.codigo,
+    descripcion: linea.producto.descripcion,
+    clase: linea.producto.clase,
+    categoria: linea.producto.categoria,
+    grupo_prueba: linea.producto.grupo_prueba ?? null,
+    cantidad: linea.cantidad,
+    precio_base_unitario: linea.precio_base_unitario,
+    precio_unitario: linea.precio_unitario,
+    subtotal: linea.subtotal,
+  }))
 
   for (const linea of lineas) {
     if (!categoriaKeys.includes(linea.categoria)) {

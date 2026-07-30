@@ -3,6 +3,7 @@ import { useAuth } from '../hooks/useAuth'
 import { MAX_CANTIDAD_CARRITO } from '../lib/constants'
 import {
   puedeAgregarAlCarrito,
+  puedeActualizarCantidad,
   puedeEliminarDelCarrito,
   validarRestriccionReactivo,
 } from '../lib/cartValidation'
@@ -56,7 +57,10 @@ export function CarritoProvider({ children }) {
         Math.max(1, Math.floor(Number(cantidad) || 1)),
       )
 
-      const validacion = puedeAgregarAlCarrito(producto, items, opciones)
+      const validacion = puedeAgregarAlCarrito(producto, items, {
+        ...opciones,
+        cantidad: qty,
+      })
       if (!validacion.ok) return validacion
 
       setItems((prev) => {
@@ -93,7 +97,7 @@ export function CarritoProvider({ children }) {
   )
 
   const actualizarCantidad = useCallback(
-    (productoId, cantidad) => {
+    (productoId, cantidad, opciones = {}) => {
       const qty = Math.floor(Number(cantidad) || 0)
 
       if (qty <= 0) {
@@ -105,6 +109,12 @@ export function CarritoProvider({ children }) {
         return { ok: false, message: `Máximo ${MAX_CANTIDAD_CARRITO} unidades por producto` }
       }
 
+      const item = items.find((i) => i.producto_id === productoId)
+      if (!item) return { ok: false, message: 'Producto no encontrado en el carrito' }
+
+      const validacion = puedeActualizarCantidad(item, qty, items, opciones)
+      if (!validacion.ok) return validacion
+
       setItems((prev) =>
         prev.map((i) =>
           i.producto_id === productoId ? { ...i, cantidad: qty } : i,
@@ -112,7 +122,7 @@ export function CarritoProvider({ children }) {
       )
       return { ok: true }
     },
-    [],
+    [items],
   )
 
   const eliminarProducto = useCallback(

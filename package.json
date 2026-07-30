@@ -9,7 +9,9 @@
     "dev:netlify": "netlify dev",
     "build": "vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy": "netlify deploy --prod",
+    "deploy:preview": "netlify deploy"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.2",

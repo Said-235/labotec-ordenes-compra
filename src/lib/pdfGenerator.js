@@ -4,7 +4,7 @@ import { fetchCategoriasDesdeBd, mapCategorias, nombreCategoria } from './catego
 import { ORDER_STATUS, SIGNED_URL_EXPIRY } from './constants.js'
 import { esEnvioIgualFiscal, getDireccionEnvio } from './datosCliente.js'
 import { getOrdenPdfPath } from './ordenes.js'
-import { formatMXN, getTotalesOrdenDesglose, esPrecioDobleSinReactivo, precioHabitualLinea } from './pricing.js'
+import { formatMXN, getTotalesOrdenDesglose, desglosePrecioLinea, precioHabitualLinea } from './pricing.js'
 
 function formatFecha(date = new Date()) {
   return new Intl.DateTimeFormat('es-MX', {
@@ -103,24 +103,33 @@ export function generateOrdenPDF({ orden, detalles, cliente, categoriaMap }) {
 
   const aumentosAplicados = orden.aumentos_aplicados ?? orden.descuento_aplicado ?? 0
 
-  const tableBody = detalles.map((d) => {
-    const precioDoble = esPrecioDobleSinReactivo(d, aumentosAplicados)
-    const condicion = precioDoble
-      ? `×2 sin Reactivo (hab. ${formatMXN(precioHabitualLinea(d, aumentosAplicados))})`
+  const filasDetalle = detalles.flatMap((d) =>
+    desglosePrecioLinea(d, aumentosAplicados).map((segmento) => ({
+      codigo: d.codigo,
+      descripcion: d.descripcion,
+      clase: d.clase,
+      precioHabitual: precioHabitualLinea(d, aumentosAplicados),
+      ...segmento,
+    })),
+  )
+
+  const tableBody = filasDetalle.map((f) => {
+    const condicion = f.esDoble
+      ? `×2 Reactivo insuf. (hab. ${formatMXN(f.precioHabitual)})`
       : '—'
 
     return [
-      d.codigo,
-      d.descripcion,
-      d.clase,
-      String(d.cantidad),
-      formatMXN(d.precio_unitario),
+      f.codigo,
+      f.descripcion,
+      f.clase,
+      String(f.cantidad),
+      formatMXN(f.precioUnitario),
       condicion,
-      formatMXN(d.subtotal),
+      formatMXN(f.subtotal),
     ]
   })
 
-  const hayPrecioDoble = detalles.some((d) => esPrecioDobleSinReactivo(d, aumentosAplicados))
+  const hayPrecioDoble = filasDetalle.some((f) => f.esDoble)
 
   autoTable(doc, {
     startY: y + 4,
@@ -139,7 +148,7 @@ export function generateOrdenPDF({ orden, detalles, cliente, categoriaMap }) {
     doc.setFontSize(7)
     doc.setTextColor(120, 80, 0)
     const notaPrecioDoble =
-      'Los productos con condición ×2 sin Reactivo se cobraron al doble de su tarifa habitual por no incluir el Reactivo del mismo grupo.'
+      'Las líneas con condición ×2 se cobraron al doble de su tarifa habitual por no incluir suficiente Reactivo del mismo grupo. Las unidades cubiertas por Reactivo figuran en línea aparte a precio habitual.'
     const notaWrapped = doc.splitTextToSize(notaPrecioDoble, 180)
     doc.text(notaWrapped, 14, finalY)
     finalY += notaWrapped.length * 4 + 4

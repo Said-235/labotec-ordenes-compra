@@ -10,6 +10,16 @@ import {
   ERRORES_ADMIN_PRINCIPAL,
 } from './adminPrincipal.js'
 
+/** Interpreta activo desde boolean, número o texto de Postgres/PostgREST. */
+function esClienteActivo(valor) {
+  if (valor === true || valor === 1) return true
+  if (valor === false || valor === 0 || valor == null) return false
+  const s = String(valor).trim().toLowerCase()
+  if (s === 'true' || s === 't' || s === '1') return true
+  if (s === 'false' || s === 'f' || s === '0' || s === '') return false
+  return Boolean(valor)
+}
+
 function validatePorcentajeAumento(porcentaje) {
   const pct = Number(porcentaje)
   if (!Number.isFinite(pct) || pct < 0 || pct > 999.99) {
@@ -66,6 +76,7 @@ export async function listarClientes() {
 
   return (data ?? []).map((c) => ({
     ...c,
+    activo: esClienteActivo(c.activo),
     aumentos_por_clase: normalizarAumentosPorClase(c),
     tiene_ordenes_pendientes: conPendientes.has(c.id),
   }))
@@ -186,7 +197,7 @@ export async function actualizarCliente(
 
 /**
  * Elimina cliente de forma permanente (Auth + perfil).
- * Solo si no tiene órdenes: el historial no debe romperse.
+ * Solo se bloquea si tiene órdenes pendientes; el resto del historial se elimina en cascada.
  */
 export async function eliminarCliente(clienteId) {
   await assertAdminSession()
@@ -206,22 +217,59 @@ export async function eliminarCliente(clienteId) {
     throw new Error(ERRORES_ADMIN_PRINCIPAL.esAdmin)
   }
 
-  const { count: ordenesCount, error: ordenesError } = await admin
+  const { count: pendientesCount, error: pendientesError } = await admin
     .from('ordenes')
     .select('id', { count: 'exact', head: true })
+    .eq('cliente_id', clienteId)
+    .eq('status', 'pendiente')
+
+  if (pendientesError) {
+    throw new Error('No se pudo verificar el historial de órdenes')
+  }
+
+  if ((pendientesCount ?? 0) > 0) {
+    throw new Error(
+      'No se puede eliminar: el cliente tiene órdenes pendientes. Desactívelo o resuelva las órdenes primero.',
+    )
+  }
+
+  const { data: ordenes, error: ordenesError } = await admin
+    .from('ordenes')
+    .select('id')
     .eq('cliente_id', clienteId)
 
   if (ordenesError) {
     throw new Error('No se pudo verificar el historial de órdenes')
   }
 
-  if ((ordenesCount ?? 0) > 0) {
-    throw new Error(
-      'No se puede eliminar: el cliente tiene órdenes registradas. Desactívelo en su lugar.',
-    )
+  const ordenIds = (ordenes ?? []).map((o) => o.id)
+
+  if (ordenIds.length > 0) {
+    const { error: comprobantesError } = await admin
+      .from('comprobantes')
+      .delete()
+      .in('orden_id', ordenIds)
+    if (comprobantesError) {
+      throw new Error('No se pudieron eliminar los comprobantes del cliente')
+    }
+
+    const { error: detalleError } = await admin
+      .from('detalle_orden')
+      .delete()
+      .in('orden_id', ordenIds)
+    if (detalleError) {
+      throw new Error('No se pudo eliminar el detalle de órdenes del cliente')
+    }
+
+    const { error: deleteOrdenesError } = await admin
+      .from('ordenes')
+      .delete()
+      .eq('cliente_id', clienteId)
+    if (deleteOrdenesError) {
+      throw new Error('No se pudieron eliminar las órdenes del cliente')
+    }
   }
 
-  // Notificaciones huérfanas (sin órdenes asociadas, por si existieran)
   await admin.from('notificaciones').delete().eq('cliente_id', clienteId)
 
   const { error: deletePerfilError } = await admin
@@ -251,9 +299,11 @@ export async function desactivarCliente(clienteId) {
   await assertAdminSession()
   const admin = getSupabaseAdmin()
 
+  if (!clienteId) throw new Error('Cliente no encontrado')
+
   const { data: perfil, error: lookupError } = await admin
     .from('clientes')
-    .select('id, es_admin')
+    .select('id, es_admin, activo')
     .eq('id', clienteId)
     .single()
 
@@ -265,13 +315,39 @@ export async function desactivarCliente(clienteId) {
     throw new Error(ERRORES_ADMIN_PRINCIPAL.esAdmin)
   }
 
-  const { error } = await admin
+  if (!esClienteActivo(perfil.activo)) {
+    return { id: clienteId, activo: false }
+  }
+
+  const { data: updated, error, count } = await admin
     .from('clientes')
     .update({ activo: false })
     .eq('id', clienteId)
     .eq('es_admin', false)
+    .select('id, activo')
+    .maybeSingle()
 
-  if (error) throw new Error('No se pudo desactivar el cliente')
+  if (error) {
+    console.error('[desactivarCliente] update error', error.message, error.code, error.details)
+    throw new Error('No se pudo desactivar el cliente')
+  }
+
+  if (!updated || esClienteActivo(updated.activo)) {
+    console.error('[desactivarCliente] update no aplicó', { clienteId, count, updated })
+    throw new Error(
+      'No se pudo desactivar el cliente: la base de datos rechaza el cambio de estado (revise triggers en la tabla clientes).',
+    )
+  }
+
+  // Impide login aunque quede alguna sesión abierta
+  const { error: banError } = await admin.auth.admin.updateUserById(clienteId, {
+    ban_duration: '876000h',
+  })
+  if (banError) {
+    console.error('[desactivarCliente] ban auth', banError.message)
+  }
+
+  return { id: updated.id, activo: false }
 }
 
 /**
@@ -281,9 +357,11 @@ export async function reactivarCliente(clienteId) {
   await assertAdminSession()
   const admin = getSupabaseAdmin()
 
+  if (!clienteId) throw new Error('Cliente no encontrado')
+
   const { data: perfil, error: lookupError } = await admin
     .from('clientes')
-    .select('id, es_admin')
+    .select('id, es_admin, activo')
     .eq('id', clienteId)
     .single()
 
@@ -295,13 +373,36 @@ export async function reactivarCliente(clienteId) {
     throw new Error(ERRORES_ADMIN_PRINCIPAL.esAdmin)
   }
 
-  const { error } = await admin
+  if (esClienteActivo(perfil.activo)) {
+    return { id: clienteId, activo: true }
+  }
+
+  const { data: updated, error } = await admin
     .from('clientes')
     .update({ activo: true })
     .eq('id', clienteId)
     .eq('es_admin', false)
+    .select('id, activo')
+    .maybeSingle()
 
-  if (error) throw new Error('No se pudo reactivar el cliente')
+  if (error) {
+    console.error('[reactivarCliente] update error', error.message, error.code, error.details)
+    throw new Error('No se pudo reactivar el cliente')
+  }
+
+  if (!updated || !esClienteActivo(updated.activo)) {
+    console.error('[reactivarCliente] update no aplicó', { clienteId, updated })
+    throw new Error('No se pudo reactivar el cliente')
+  }
+
+  const { error: unbanError } = await admin.auth.admin.updateUserById(clienteId, {
+    ban_duration: 'none',
+  })
+  if (unbanError) {
+    console.error('[reactivarCliente] unban auth', unbanError.message)
+  }
+
+  return { id: updated.id, activo: true }
 }
 
 /**

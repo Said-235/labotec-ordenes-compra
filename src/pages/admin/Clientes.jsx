@@ -120,14 +120,18 @@ export default function Clientes() {
   async function handleToggleActivo(cliente) {
     setError('')
     try {
-      if (cliente.activo) {
-        await desactivarCliente(cliente.id)
-        flash('Cliente desactivado')
-      } else {
-        await reactivarCliente(cliente.id)
-        flash('Cliente reactivado')
-      }
-      await cargar()
+      const result = cliente.activo
+        ? await desactivarCliente(cliente.id)
+        : await reactivarCliente(cliente.id)
+
+      const activo = result?.activo === true
+      setClientes((prev) =>
+        prev.map((c) => (c.id === cliente.id ? { ...c, activo } : c)),
+      )
+      flash(activo ? 'Cliente reactivado' : 'Cliente desactivado')
+      // No recargar de inmediato: la lista ya refleja el nuevo estado.
+      // Recarga en segundo plano por si hay otros campos desfasados.
+      cargar().catch(() => {})
     } catch (err) {
       setError(getSafeErrorMessage(err, 'No se pudo cambiar el estado'))
     }
@@ -237,7 +241,7 @@ export default function Clientes() {
                             : 'bg-gray-200 text-gray-600'
                         }`}
                       >
-                        {c.activo ? 'Activo' : 'Inactivo'}
+                        {c.activo ? 'Activo' : 'Desactivado'}
                       </span>
                     </td>
                     <td className="px-4 py-3">
@@ -273,7 +277,17 @@ export default function Clientes() {
                         <button
                           type="button"
                           onClick={() => setConfirmarEliminar(c)}
-                          className="text-xs text-red-600 hover:underline"
+                          disabled={c.tiene_ordenes_pendientes}
+                          title={
+                            c.tiene_ordenes_pendientes
+                              ? 'No se puede eliminar con órdenes pendientes'
+                              : undefined
+                          }
+                          className={`text-xs hover:underline ${
+                            c.tiene_ordenes_pendientes
+                              ? 'cursor-not-allowed text-gray-400'
+                              : 'text-red-600'
+                          }`}
                         >
                           Eliminar
                         </button>
@@ -338,7 +352,7 @@ export default function Clientes() {
         titulo="Eliminar cliente"
         mensaje={
           confirmarEliminar
-            ? `Se eliminará permanentemente a «${confirmarEliminar.nombre}» (${confirmarEliminar.email}) y su cuenta de acceso.\n\nSolo es posible si no tiene órdenes. Si las tiene, desactívelo en su lugar.`
+            ? `Se eliminará permanentemente a «${confirmarEliminar.nombre}» (${confirmarEliminar.email}), su cuenta de acceso y su historial de órdenes (pagadas/canceladas).\n\nNo es posible si tiene órdenes pendientes: desactívelo o resuelva esas órdenes primero.`
             : null
         }
         onConfirmar={handleEliminarCliente}

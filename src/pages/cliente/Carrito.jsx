@@ -2,10 +2,15 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import AvisoCorteBanner from '../../components/AvisoCorteBanner'
 import ConfirmacionModal from '../../components/ConfirmacionModal'
+import AlertaModal from '../../components/AlertaModal'
 import { useCarrito } from '../../hooks/useCarrito'
 import { useCategorias } from '../../hooks/useCategorias'
 import { getSafeErrorMessage } from '../../lib/errors'
-import { mensajeViolacionesReactivo } from '../../lib/cartValidation'
+import {
+  mensajeConfirmacionPrecioDoble,
+  mensajeViolacionesReactivo,
+} from '../../lib/cartValidation'
+import { MULTIPLICADOR_PRECIO_SIN_REACTIVO } from '../../lib/constants'
 import {
   esVentanaMantenimientoCorte,
   getMensajeAvisoCorte,
@@ -29,6 +34,8 @@ export default function Carrito() {
   const [error, setError] = useState('')
   const [ordenesCreadas, setOrdenesCreadas] = useState(null)
   const [mensajeItem, setMensajeItem] = useState('')
+  const [alertaCantidad, setAlertaCantidad] = useState(null)
+  const [confirmacionCantidad, setConfirmacionCantidad] = useState(null)
   const [avisoCortePendiente, setAvisoCortePendiente] = useState(false)
   const avisoCorteActivo = esVentanaMantenimientoCorte()
   const mensajeCorte = getMensajeAvisoCorte()
@@ -79,7 +86,48 @@ export default function Carrito() {
   function handleCantidadChange(productoId, value) {
     setMensajeItem('')
     const result = actualizarCantidad(productoId, value)
-    if (!result.ok) setMensajeItem(result.message)
+    if (result.ok) return
+
+    if (result.requiresConfirmacion) {
+      const item = items.find((i) => i.producto_id === productoId)
+      if (!item) {
+        setAlertaCantidad(result.message ?? 'No se pudo actualizar la cantidad')
+        return
+      }
+
+      setConfirmacionCantidad({
+        productoId,
+        cantidad: value,
+        mensaje: mensajeConfirmacionPrecioDoble(
+          item,
+          'tarifa habitual',
+          `×${MULTIPLICADOR_PRECIO_SIN_REACTIVO} de la tarifa habitual`,
+          {
+            qtyReactivo: result.qtyReactivo ?? 0,
+            totalClaseTrasAgregar: result.totalClaseTrasAgregar,
+          },
+        ),
+      })
+      return
+    }
+
+    if (result.message) setMensajeItem(result.message)
+    else setAlertaCantidad(result.message ?? 'No se pudo actualizar la cantidad')
+  }
+
+  function handleConfirmarCantidad() {
+    if (!confirmacionCantidad) return
+
+    const { productoId, cantidad } = confirmacionCantidad
+    const result = actualizarCantidad(productoId, cantidad, {
+      confirmarPrecioDoble: true,
+    })
+
+    setConfirmacionCantidad(null)
+
+    if (!result.ok) {
+      setAlertaCantidad(result.message ?? 'No se pudo actualizar la cantidad')
+    }
   }
 
   function handleEliminar(productoId) {
@@ -172,6 +220,20 @@ export default function Carrito() {
         confirmarTexto="Entendido, confirmar"
         cancelarTexto="Volver"
         confirmando={confirmando}
+      />
+
+      <ConfirmacionModal
+        titulo="Precio sin Reactivo suficiente"
+        mensaje={confirmacionCantidad?.mensaje}
+        onConfirmar={handleConfirmarCantidad}
+        onCancelar={() => setConfirmacionCantidad(null)}
+        confirmarTexto="Confirmar"
+      />
+
+      <AlertaModal
+        titulo="No se puede actualizar"
+        mensaje={alertaCantidad}
+        onCerrar={() => setAlertaCantidad(null)}
       />
 
       {items.length === 0 ? (

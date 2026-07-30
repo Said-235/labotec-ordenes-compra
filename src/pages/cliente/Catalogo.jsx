@@ -106,6 +106,10 @@ export default function Catalogo() {
           producto,
           formatMXN(precioNormal),
           formatMXN(precioDoble),
+          {
+            qtyReactivo: result.qtyReactivo ?? 0,
+            totalClaseTrasAgregar: result.totalClaseTrasAgregar,
+          },
         ),
       })
       return
@@ -162,7 +166,7 @@ export default function Catalogo() {
       />
 
       <ConfirmacionModal
-        titulo="Precio sin Reactivo"
+        titulo="Precio sin Reactivo suficiente"
         mensaje={confirmacionCarrito?.mensaje}
         onConfirmar={handleConfirmarAgregar}
         onCancelar={() => setConfirmacionCarrito(null)}

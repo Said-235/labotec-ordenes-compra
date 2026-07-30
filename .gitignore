@@ -14,19 +14,20 @@ dist-ssr
 
 # Environment variables — never commit credentials
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
 
-# Editor
+# Editor / OS
 .vscode/*
 !.vscode/extensions.json
 .idea
 .DS_Store
+Thumbs.db
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
 
-# Local Netlify folder
+# Local Netlify folder (CLI cache / state — not the netlify/ source)
 .netlify
