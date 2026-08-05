@@ -160,9 +160,14 @@ export function calcularPrecioLinea(
  *
  * @param {Array<{producto: object, cantidad: number}>} lineas
  * @param {object|number} aumentosFuente
+ * @param {{ aplicaReglaCalibradorControl?: boolean }} [opciones]
  * @returns {Array<{precioNormal: number, precioDoble: number, subtotal: number, unidadesCubiertas: number, unidadesExceso: number}>}
  */
-export function calcularPreciosConCoberturaReactivo(lineas, aumentosFuente) {
+export function calcularPreciosConCoberturaReactivo(
+  lineas,
+  aumentosFuente,
+  { aplicaReglaCalibradorControl = true } = {},
+) {
   const qtyReactivo = cantidadesReactivoPorGrupo(
     lineas.map(({ producto, cantidad }) => ({ ...producto, cantidad })),
   )
@@ -176,7 +181,11 @@ export function calcularPreciosConCoberturaReactivo(lineas, aumentosFuente) {
     const precioDoble =
       Math.round(precioNormal * MULTIPLICADOR_PRECIO_SIN_REACTIVO * 100) / 100
 
-    if (!CLASES_REQUIEREN_REACTIVO.includes(producto.clase) || qty <= 0) {
+    if (
+      !aplicaReglaCalibradorControl ||
+      !CLASES_REQUIEREN_REACTIVO.includes(producto.clase) ||
+      qty <= 0
+    ) {
       const subtotal = Math.round(precioNormal * qty * 100) / 100
       return {
         precioNormal,
@@ -229,10 +238,15 @@ export function calcularPreciosConCoberturaReactivo(lineas, aumentosFuente) {
  *
  * @param {Array<{producto: object, cantidad: number}>} lineas
  * @param {object|number} aumentosFuente
+ * @param {{ aplicaReglaCalibradorControl?: boolean }} [opciones]
  * @returns {Array<{producto: object, cantidad: number, precio_base_unitario: number, precio_unitario: number, subtotal: number, esPrecioDoble: boolean}>}
  */
-export function expandirLineasConCoberturaReactivo(lineas, aumentosFuente) {
-  const precios = calcularPreciosConCoberturaReactivo(lineas, aumentosFuente)
+export function expandirLineasConCoberturaReactivo(
+  lineas,
+  aumentosFuente,
+  opciones = {},
+) {
+  const precios = calcularPreciosConCoberturaReactivo(lineas, aumentosFuente, opciones)
   const resultado = []
 
   for (let i = 0; i < lineas.length; i++) {

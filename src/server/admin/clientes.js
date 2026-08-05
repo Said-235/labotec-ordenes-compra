@@ -51,6 +51,16 @@ function validateAumentosPorClase(raw) {
   return map
 }
 
+/** Interpreta el flag de regla Calibrador/Control (default true). */
+function normalizeAplicaReglaCalibradorControl(valor) {
+  if (valor === false || valor === 0) return false
+  if (valor === true || valor === 1) return true
+  if (valor == null || valor === '') return true
+  const s = String(valor).trim().toLowerCase()
+  if (s === 'false' || s === 'f' || s === '0') return false
+  return true
+}
+
 /**
  * Lista clientes (excluye admins del listado editable).
  */
@@ -62,7 +72,7 @@ export async function listarClientes() {
     admin
       .from('clientes')
       .select(
-        'id, nombre, email, porcentaje_aumento, aumentos_por_clase, primer_login, activo, creado_en, datos_fiscales',
+        'id, nombre, email, porcentaje_aumento, aumentos_por_clase, aplica_regla_calibrador_control, primer_login, activo, creado_en, datos_fiscales',
       )
       .eq('es_admin', false)
       .order('nombre'),
@@ -77,6 +87,9 @@ export async function listarClientes() {
   return (data ?? []).map((c) => ({
     ...c,
     activo: esClienteActivo(c.activo),
+    aplica_regla_calibrador_control: normalizeAplicaReglaCalibradorControl(
+      c.aplica_regla_calibrador_control,
+    ),
     aumentos_por_clase: normalizarAumentosPorClase(c),
     tiene_ordenes_pendientes: conPendientes.has(c.id),
   }))
@@ -91,6 +104,7 @@ export async function crearCliente({
   password,
   aumentos_por_clase,
   porcentaje_aumento,
+  aplica_regla_calibrador_control,
 }) {
   await assertAdminSession()
   const admin = getSupabaseAdmin()
@@ -102,6 +116,9 @@ export async function crearCliente({
     aumentos_por_clase ?? porcentaje_aumento ?? 0,
   )
   const cleanAumentoLegado = sanitizePorcentaje(cleanAumentos.Reactivo)
+  const aplicaRegla = normalizeAplicaReglaCalibradorControl(
+    aplica_regla_calibrador_control,
+  )
 
   if (!cleanNombre) throw new Error('El nombre es requerido')
   if (!isValidEmail(cleanEmail)) throw new Error('Formato de correo inválido')
@@ -127,6 +144,7 @@ export async function crearCliente({
     nivel: 1,
     porcentaje_aumento: cleanAumentoLegado,
     aumentos_por_clase: cleanAumentos,
+    aplica_regla_calibrador_control: aplicaRegla,
     primer_login: true,
     activo: true,
   })
@@ -144,7 +162,7 @@ export async function crearCliente({
  */
 export async function actualizarCliente(
   clienteId,
-  { nombre, aumentos_por_clase, porcentaje_aumento },
+  { nombre, aumentos_por_clase, porcentaje_aumento, aplica_regla_calibrador_control },
 ) {
   await assertAdminSession()
   const admin = getSupabaseAdmin()
@@ -180,6 +198,12 @@ export async function actualizarCliente(
     const cleanAumentos = validateAumentosPorClase(porcentaje_aumento)
     updates.aumentos_por_clase = cleanAumentos
     updates.porcentaje_aumento = sanitizePorcentaje(cleanAumentos.Reactivo)
+  }
+
+  if (aplica_regla_calibrador_control != null) {
+    updates.aplica_regla_calibrador_control = normalizeAplicaReglaCalibradorControl(
+      aplica_regla_calibrador_control,
+    )
   }
 
   if (!Object.keys(updates).length) {

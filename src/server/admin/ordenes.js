@@ -57,7 +57,10 @@ export async function obtenerTodasOrdenes({ status } = {}) {
 
   const { data, error } = await query
 
-  if (error) throw new Error('No se pudieron cargar las órdenes')
+  if (error) {
+    console.error('[ordenes.list]', error.code, error.message, error.details || '', error.hint || '')
+    throw new Error('No se pudieron cargar las órdenes')
+  }
   return data ?? []
 }
 

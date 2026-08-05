@@ -101,10 +101,11 @@ export async function handleAdminRequest({ authHeader, action, payload }) {
   } catch (err) {
     const status = err?.status || 400
     const message = err?.message || 'Error en operación de administración'
+    console.error('[admin]', action || '(sin acción)', status, message)
     // Nunca filtrar detalles técnicos de Supabase
     const safe =
-      /service_role|JWT|supabase|stack|ECONNREFUSED/i.test(message)
-        ? 'No se pudo completar la operación'
+      /service_role|JWT|supabase|stack|ECONNREFUSED|Faltan SUPABASE/i.test(message)
+        ? 'El sistema no está configurado correctamente. Contacte al administrador.'
         : message
     return { status: status >= 400 && status < 600 ? status : 400, body: { error: safe } }
   }

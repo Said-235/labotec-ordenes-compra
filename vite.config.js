@@ -55,12 +55,18 @@ function adminApiPlugin() {
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
-  // Exponer al middleware Node (sin prefijo VITE_ para service role)
-  process.env.SUPABASE_URL = process.env.SUPABASE_URL || env.SUPABASE_URL || env.VITE_SUPABASE_URL
+  // Preferir siempre .env del proyecto (evita quedar con claves vacías tras un restart HMR)
+  process.env.SUPABASE_URL = env.SUPABASE_URL || env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
   process.env.SUPABASE_ANON_KEY =
-    process.env.SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY
+    env.SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
   process.env.SUPABASE_SERVICE_ROLE_KEY =
-    process.env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_ROLE_KEY
+    env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    console.warn(
+      '[labotec-admin-api] Falta SUPABASE_SERVICE_ROLE_KEY en .env — las rutas /admin fallarán.',
+    )
+  }
 
   return {
     plugins: [react(), tailwindcss(), adminApiPlugin()],

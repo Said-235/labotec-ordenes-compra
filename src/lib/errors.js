@@ -94,6 +94,14 @@ const EXACT_USER_MESSAGES = new Set([
   'Conflicto al insertar producto (código duplicado)',
   'Indique el motivo del rechazo (mínimo 5 caracteres)',
   'El sistema no está configurado correctamente. Contacte al administrador.',
+  'No se pudieron cargar las órdenes',
+  'No se pudo completar la operación',
+  'No se pudo completar la operación de administración',
+  'Acción inválida',
+  'Acción no encontrada',
+  'Método no permitido',
+  'JSON inválido',
+  'Contexto admin no disponible',
 ])
 
 /** Mensajes compuestos o con datos dinámicos (prefijo reconocible). */

@@ -52,6 +52,7 @@ export default function Clientes() {
     email: '',
     password: '',
     aumentos_por_clase: aumentosPorClaseVacios(),
+    aplica_regla_calibrador_control: true,
   })
   const [passwordNueva, setPasswordNueva] = useState('')
   const [guardando, setGuardando] = useState(false)
@@ -89,6 +90,7 @@ export default function Clientes() {
         email: formCrear.email,
         password: formCrear.password,
         aumentos_por_clase: formCrear.aumentos_por_clase,
+        aplica_regla_calibrador_control: formCrear.aplica_regla_calibrador_control,
       })
       setModalCrear(false)
       setFormCrear({
@@ -96,6 +98,7 @@ export default function Clientes() {
         email: '',
         password: '',
         aumentos_por_clase: aumentosPorClaseVacios(),
+        aplica_regla_calibrador_control: true,
       })
       flash('Cliente creado correctamente')
       await cargar()
@@ -114,6 +117,30 @@ export default function Clientes() {
       await cargar()
     } catch (err) {
       setError(getSafeErrorMessage(err, 'No se pudieron actualizar los aumentos'))
+    }
+  }
+
+  async function handleToggleRegla(cliente) {
+    setError('')
+    const nuevoValor = !cliente.aplica_regla_calibrador_control
+    try {
+      await actualizarCliente(cliente.id, {
+        aplica_regla_calibrador_control: nuevoValor,
+      })
+      setClientes((prev) =>
+        prev.map((c) =>
+          c.id === cliente.id
+            ? { ...c, aplica_regla_calibrador_control: nuevoValor }
+            : c,
+        ),
+      )
+      flash(
+        nuevoValor
+          ? 'Regla Calibrador/Control activada'
+          : 'Regla Calibrador/Control desactivada',
+      )
+    } catch (err) {
+      setError(getSafeErrorMessage(err, 'No se pudo actualizar la regla'))
     }
   }
 
@@ -207,6 +234,7 @@ export default function Clientes() {
                 <th className="px-4 py-3">Nombre</th>
                 <th className="px-4 py-3">Email</th>
                 <th className="px-4 py-3">Aumentos por clase (%)</th>
+                <th className="px-4 py-3">Regla Cal/Ctrl</th>
                 <th className="px-4 py-3">Estado</th>
                 <th className="px-4 py-3">Órdenes</th>
                 <th className="px-4 py-3">Datos fiscales</th>
@@ -216,7 +244,7 @@ export default function Clientes() {
             <tbody className="divide-y divide-gray-100">
               {clientes.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
                     No hay clientes registrados
                   </td>
                 </tr>
@@ -232,6 +260,25 @@ export default function Clientes() {
                         onSave={(aumentos) => handleCambioAumentos(c.id, aumentos)}
                         compact
                       />
+                    </td>
+                    <td className="px-4 py-3">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleRegla(c)}
+                        disabled={!c.activo}
+                        title={
+                          c.aplica_regla_calibrador_control
+                            ? 'Calibrador/Control sin Reactivo suficiente se cobran ×2'
+                            : 'Exento: Calibrador/Control siempre a tarifa habitual'
+                        }
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium disabled:cursor-not-allowed ${
+                          c.aplica_regla_calibrador_control
+                            ? 'bg-blue-100 text-blue-800 hover:bg-blue-200'
+                            : 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                        }`}
+                      >
+                        {c.aplica_regla_calibrador_control ? 'Aplica' : 'Exento'}
+                      </button>
                     </td>
                     <td className="px-4 py-3">
                       <span
@@ -338,6 +385,29 @@ export default function Clientes() {
               Ej. Reactivo 10 y Calibrador 25 → cada clase usa su propio %.
             </p>
           </div>
+          <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
+            <input
+              type="checkbox"
+              checked={formCrear.aplica_regla_calibrador_control}
+              onChange={(e) =>
+                setFormCrear((f) => ({
+                  ...f,
+                  aplica_regla_calibrador_control: e.target.checked,
+                }))
+              }
+              className="mt-0.5 h-4 w-4 rounded border-gray-300 text-labotec-teal focus:ring-labotec-teal"
+            />
+            <span>
+              <span className="block text-sm font-medium text-gray-800">
+                Aplicar regla Calibrador / Control
+              </span>
+              <span className="mt-0.5 block text-xs text-gray-500">
+                Si está activa, las unidades de Calibrador o Control que excedan la
+                cantidad de Reactivo del mismo grupo se cobran al doble. Desactívela
+                para clientes con condiciones especiales.
+              </span>
+            </span>
+          </label>
           <button
             type="submit"
             disabled={guardando}

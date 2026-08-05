@@ -9,7 +9,7 @@ async function fetchClienteProfile(userId) {
   const { data, error } = await supabase
     .from('clientes')
     .select(
-      'id, nombre, email, es_admin, porcentaje_aumento, aumentos_por_clase, primer_login, datos_fiscales, activo',
+      'id, nombre, email, es_admin, porcentaje_aumento, aumentos_por_clase, aplica_regla_calibrador_control, primer_login, datos_fiscales, activo',
     )
     .eq('id', userId)
     .single()
@@ -17,6 +17,7 @@ async function fetchClienteProfile(userId) {
   if (error) throw new Error('No se pudo cargar su perfil de usuario')
   return {
     ...data,
+    aplica_regla_calibrador_control: data.aplica_regla_calibrador_control !== false,
     aumentos_por_clase: normalizarAumentosPorClase(data),
   }
 }

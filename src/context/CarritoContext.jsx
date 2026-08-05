@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { useAuth } from '../hooks/useAuth'
 import { MAX_CANTIDAD_CARRITO } from '../lib/constants'
 import {
+  clienteAplicaReglaCalibradorControl,
   puedeAgregarAlCarrito,
   puedeActualizarCantidad,
   puedeEliminarDelCarrito,
@@ -32,6 +33,7 @@ function saveCart(userId, items) {
 export function CarritoProvider({ children }) {
   const { session, cliente } = useAuth()
   const userId = session?.user?.id
+  const aplicaRegla = clienteAplicaReglaCalibradorControl(cliente)
   const [items, setItems] = useState([])
 
   useEffect(() => {
@@ -60,6 +62,7 @@ export function CarritoProvider({ children }) {
       const validacion = puedeAgregarAlCarrito(producto, items, {
         ...opciones,
         cantidad: qty,
+        aplicaReglaCalibradorControl: aplicaRegla,
       })
       if (!validacion.ok) return validacion
 
@@ -93,7 +96,7 @@ export function CarritoProvider({ children }) {
 
       return { ok: true }
     },
-    [userId, items],
+    [userId, items, aplicaRegla],
   )
 
   const actualizarCantidad = useCallback(
@@ -112,7 +115,10 @@ export function CarritoProvider({ children }) {
       const item = items.find((i) => i.producto_id === productoId)
       if (!item) return { ok: false, message: 'Producto no encontrado en el carrito' }
 
-      const validacion = puedeActualizarCantidad(item, qty, items, opciones)
+      const validacion = puedeActualizarCantidad(item, qty, items, {
+        ...opciones,
+        aplicaReglaCalibradorControl: aplicaRegla,
+      })
       if (!validacion.ok) return validacion
 
       setItems((prev) =>
@@ -122,7 +128,7 @@ export function CarritoProvider({ children }) {
       )
       return { ok: true }
     },
-    [items],
+    [items, aplicaRegla],
   )
 
   const eliminarProducto = useCallback(

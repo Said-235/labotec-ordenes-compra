@@ -4,6 +4,13 @@ import { MULTIPLICADOR_PRECIO_SIN_REACTIVO } from './constants.js'
 export const CLASES_REQUIEREN_REACTIVO = ['Calibrador', 'Control']
 
 /**
+ * Si el cliente tiene la regla activa (default true si el campo no existe).
+ */
+export function clienteAplicaReglaCalibradorControl(cliente) {
+  return cliente?.aplica_regla_calibrador_control !== false
+}
+
+/**
  * Normaliza el grupo de prueba para comparación.
  * Ej: "TSH", " glucosa " → "glucosa"
  */
@@ -118,7 +125,11 @@ function resultadoExcedeReactivo(qtyReactivo, totalClaseTrasAgregar, confirmarPr
 export function puedeAgregarAlCarrito(
   producto,
   itemsActuales,
-  { confirmarPrecioDoble = false, cantidad = 1 } = {},
+  {
+    confirmarPrecioDoble = false,
+    cantidad = 1,
+    aplicaReglaCalibradorControl = true,
+  } = {},
 ) {
   if (!CLASES_REQUIEREN_REACTIVO.includes(producto.clase)) {
     return { ok: true }
@@ -131,6 +142,11 @@ export function puedeAgregarAlCarrito(
       ok: false,
       message: `El ${producto.clase} "${producto.codigo}" no tiene grupo de prueba asignado. Contacte al administrador para configurarlo.`,
     }
+  }
+
+  // Cliente exento: solo exige grupo de prueba configurado
+  if (!aplicaReglaCalibradorControl) {
+    return { ok: true }
   }
 
   const qty = Math.max(1, Math.floor(Number(cantidad) || 1))
@@ -153,7 +169,7 @@ export function puedeActualizarCantidad(
   item,
   nuevaCantidad,
   itemsActuales,
-  { confirmarPrecioDoble = false } = {},
+  { confirmarPrecioDoble = false, aplicaReglaCalibradorControl = true } = {},
 ) {
   if (!CLASES_REQUIEREN_REACTIVO.includes(item.clase)) {
     return { ok: true }
@@ -165,6 +181,10 @@ export function puedeActualizarCantidad(
       ok: false,
       message: `El ${item.clase} "${item.codigo}" no tiene grupo de prueba asignado. Contacte al administrador para configurarlo.`,
     }
+  }
+
+  if (!aplicaReglaCalibradorControl) {
+    return { ok: true }
   }
 
   const qty = Math.floor(Number(nuevaCantidad) || 0)

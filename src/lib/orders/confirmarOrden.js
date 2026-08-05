@@ -52,7 +52,7 @@ export async function confirmarOrden(cartItems) {
   const { data: cliente, error: clienteError } = await supabase
     .from('clientes')
     .select(
-      'id, nombre, email, nivel, porcentaje_aumento, aumentos_por_clase, datos_fiscales, activo, primer_login',
+      'id, nombre, email, nivel, porcentaje_aumento, aumentos_por_clase, aplica_regla_calibrador_control, datos_fiscales, activo, primer_login',
     )
     .eq('id', user.id)
     .single()
@@ -74,6 +74,7 @@ export async function confirmarOrden(cartItems) {
   const aumentoAplicado = sanitizePorcentaje(aumentosAplicados.Reactivo)
   // Snapshot legado: la BD aún exige nivel 1–3 (ya no afecta el precio)
   const nivelSnapshot = [1, 2, 3].includes(Number(cliente.nivel)) ? Number(cliente.nivel) : 1
+  const aplicaReglaCalibradorControl = cliente.aplica_regla_calibrador_control !== false
 
   const categoriasRows = await fetchCategoriasDesdeBd(supabase, { soloActivas: true })
   const categoriaKeys = keysCategorias(categoriasRows)
@@ -116,6 +117,7 @@ export async function confirmarOrden(cartItems) {
   const lineasExpandidas = expandirLineasConCoberturaReactivo(
     lineasInput,
     aumentosAplicados,
+    { aplicaReglaCalibradorControl },
   )
 
   const lineas = lineasExpandidas.map((linea) => ({
