@@ -5,29 +5,24 @@ import * as administradores from './admin/administradores.js'
 import * as productos from './admin/productos.js'
 import * as categorias from './admin/categorias.js'
 import * as ordenes from './admin/ordenes.js'
+import * as ordenGeneral from './admin/ordenGeneral.js'
 import * as eliminarProductos from './admin/eliminarProductos.js'
 import * as cargaOds from './admin/cargaOds.js'
 
 const actions = {
   'dashboard.stats': async () => {
     const admin = (await import('./adminContext.js')).getSupabaseAdmin()
-    const [clientesCount, productosCount, ordenesPendientes, comprobantesPendientes] =
+    const [clientesCount, productosCount, ordenesPendientes] =
       await Promise.all([
         admin.from('clientes').select('id', { count: 'exact', head: true }).eq('es_admin', false).eq('activo', true),
         admin.from('productos').select('id', { count: 'exact', head: true }).eq('activo', true),
         admin.from('ordenes').select('id', { count: 'exact', head: true }).eq('status', 'pendiente'),
-        admin
-          .from('comprobantes')
-          .select('id', { count: 'exact', head: true })
-          .eq('validado', false)
-          .eq('rechazado', false),
       ])
 
     return {
       clientes: clientesCount.count ?? 0,
       productos: productosCount.count ?? 0,
       ordenesPendientes: ordenesPendientes.count ?? 0,
-      comprobantesPendientes: comprobantesPendientes.count ?? 0,
     }
   },
 
@@ -67,11 +62,13 @@ const actions = {
   'categorias.setActive': (p) => categorias.actualizarEstadoCategoria(p.clave, p.activo),
 
   'ordenes.list': (p) => ordenes.obtenerTodasOrdenes(p),
-  'ordenes.validarComprobante': (p) => ordenes.validarComprobante(p.comprobanteId, p.notasAdmin),
-  'ordenes.rechazarComprobante': (p) =>
-    ordenes.rechazarComprobante(p.comprobanteId, p.motivoRechazo),
-  'ordenes.comprobanteUrl': (p) => ordenes.getComprobanteAdminUrl(p.path),
+  'ordenes.marcarPagada': (p) => ordenes.marcarOrdenPagada(p.ordenId, p.notasAdmin),
   'ordenes.pdfUrl': (p) => ordenes.getOrdenPdfAdminUrl(p.clienteId, p.ordenId, p.categoria),
+
+  'ordenGeneral.preview': () => ordenGeneral.previewOrdenGeneral(),
+  'ordenGeneral.generar': (p) => ordenGeneral.generarOrdenGeneral(p),
+  'ordenGeneral.list': () => ordenGeneral.listarOrdenesGenerales(),
+  'ordenGeneral.pdfUrl': (p) => ordenGeneral.getOrdenGeneralPdfUrl(p.ordenGeneralId),
 
   'cargaOds.procesar': (p) => cargaOds.procesarCargaODSFromRows(p),
   'cargaOds.logs': (p) => cargaOds.obtenerLogCargas(p?.limit),

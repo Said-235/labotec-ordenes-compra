@@ -1,12 +1,15 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import AvisoCorteBanner from '../../components/AvisoCorteBanner'
 import ConfirmacionModal from '../../components/ConfirmacionModal'
 import AlertaModal from '../../components/AlertaModal'
+import OrdenTotalesResumen from '../../components/OrdenTotalesResumen'
+import { useAuth } from '../../hooks/useAuth'
 import { useCarrito } from '../../hooks/useCarrito'
 import { useCategorias } from '../../hooks/useCategorias'
 import { getSafeErrorMessage } from '../../lib/errors'
 import {
+  clienteAplicaReglaCalibradorControl,
   mensajeConfirmacionPrecioDoble,
   mensajeViolacionesReactivo,
 } from '../../lib/cartValidation'
@@ -17,7 +20,13 @@ import {
   getResumenAvisoCorte,
 } from '../../lib/cortePedidos'
 import { confirmarOrden } from '../../lib/orders/confirmarOrden'
-import { formatMXN } from '../../lib/pricing'
+import {
+  calcularTotalesOrden,
+  expandirLineasConCoberturaReactivo,
+  formatMXN,
+  normalizarAumentosPorClase,
+} from '../../lib/pricing'
+import { supabase } from '../../lib/supabaseClient'
 
 export default function Carrito() {
   const {
@@ -29,8 +38,10 @@ export default function Carrito() {
     vaciarCarrito,
   } = useCarrito()
   const { getNombreCategoria } = useCategorias()
+  const { cliente } = useAuth()
 
   const [confirmando, setConfirmando] = useState(false)
+  const [totalesCarrito, setTotalesCarrito] = useState(null)
   const [error, setError] = useState('')
   const [ordenesCreadas, setOrdenesCreadas] = useState(null)
   const [mensajeItem, setMensajeItem] = useState('')
@@ -45,6 +56,49 @@ export default function Carrito() {
     acc[item.categoria].push(item)
     return acc
   }, {})
+
+  useEffect(() => {
+    if (!items.length) {
+      setTotalesCarrito(null)
+      return
+    }
+
+    let cancelled = false
+
+    async function cargarTotales() {
+      const productoIds = [...new Set(items.map((i) => i.producto_id))]
+      const { data: productos, error } = await supabase
+        .from('productos')
+        .select('id, clase, categoria, precio_base, grupo_prueba')
+        .in('id', productoIds)
+
+      if (cancelled || error || !productos?.length) return
+
+      const productoMap = Object.fromEntries(productos.map((p) => [p.id, p]))
+      const lineasInput = items
+        .map((item) => {
+          const producto = productoMap[item.producto_id]
+          if (!producto) return null
+          return { producto, cantidad: item.cantidad }
+        })
+        .filter(Boolean)
+
+      if (!lineasInput.length) return
+
+      const lineas = expandirLineasConCoberturaReactivo(
+        lineasInput,
+        normalizarAumentosPorClase(cliente),
+        { aplicaReglaCalibradorControl: clienteAplicaReglaCalibradorControl(cliente) },
+      )
+      const subtotal = lineas.reduce((sum, l) => sum + l.subtotal, 0)
+      setTotalesCarrito(calcularTotalesOrden(subtotal, { incluirEnvio: true }))
+    }
+
+    cargarTotales()
+    return () => {
+      cancelled = true
+    }
+  }, [items, cliente])
 
   function handleConfirmarClick() {
     setError('')
@@ -150,10 +204,9 @@ export default function Carrito() {
             </p>
           )}
           <p className="mt-3 text-sm text-green-900">
-            Para completar el pago, diríjase a{' '}
-            <span className="font-medium">Mis órdenes</span> y cargue su comprobante de pago
-            (PDF, JPG o PNG). Recibirá un aviso en{' '}
-            <span className="font-medium">Notificaciones</span> cuando administración lo revise.
+            Su pedido quedó pendiente de pago. Administración confirmará cuando el pago
+            llegue y recibirá un aviso en{' '}
+            <span className="font-medium">Notificaciones</span>.
           </p>
 
           <ul className="mt-4 space-y-3">
@@ -321,6 +374,17 @@ export default function Carrito() {
           {error && (
             <div className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 whitespace-pre-line">
               {error}
+            </div>
+          )}
+
+          {totalesCarrito && (
+            <div className="mt-6 rounded-xl border border-gray-200 bg-white px-4 pb-4 shadow-sm">
+              <OrdenTotalesResumen
+                orden={{
+                  subtotal: totalesCarrito.subtotal,
+                  total: totalesCarrito.total,
+                }}
+              />
             </div>
           )}
 

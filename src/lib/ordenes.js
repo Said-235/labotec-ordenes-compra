@@ -1,12 +1,8 @@
 import { supabase } from './supabaseClient'
 import { SIGNED_URL_EXPIRY } from './constants'
+import { getOrdenPdfPath } from './ordenPdfPaths'
 
-/**
- * Ruta canónica del PDF de una orden en Storage.
- */
-export function getOrdenPdfPath(clienteId, ordenId, categoria) {
-  return `${clienteId}/${ordenId}/orden_${categoria}.pdf`
-}
+export { getOrdenPdfPath }
 
 /**
  * Obtiene URL firmada del PDF de una orden.
@@ -27,7 +23,7 @@ export async function getOrdenPdfUrl(orden, clienteId) {
 }
 
 /**
- * Obtiene las órdenes del cliente autenticado con detalle y comprobantes.
+ * Obtiene las órdenes del cliente autenticado con detalle.
  */
 export async function obtenerMisOrdenes() {
   const {
@@ -51,16 +47,6 @@ export async function obtenerMisOrdenes() {
       pdf_url,
       creado_en,
       payment_confirmed_at,
-      comprobantes (
-        id,
-        url_archivo,
-        validado,
-        validado_en,
-        rechazado,
-        rechazado_en,
-        notas_admin,
-        creado_en
-      ),
       detalle_orden (
         id,
         cantidad,
@@ -82,16 +68,14 @@ export async function obtenerMisOrdenes() {
 }
 
 /**
- * Indica si el cliente puede cancelar la orden (solo pendiente sin comprobante).
+ * Indica si el cliente puede cancelar la orden (solo pendiente).
  */
 export function puedeCancelarOrden(orden) {
-  if (orden.status !== 'pendiente') return false
-  const comprobantes = orden.comprobantes ?? []
-  return comprobantes.length === 0
+  return orden.status === 'pendiente'
 }
 
 /**
- * Cancela una orden pendiente sin comprobante de pago.
+ * Cancela una orden pendiente de pago.
  */
 export async function cancelarOrden(ordenId) {
   const {
@@ -114,21 +98,6 @@ export async function cancelarOrden(ordenId) {
 
   if (orden.status !== 'pendiente') {
     throw new Error('Solo puede cancelar órdenes pendientes de pago')
-  }
-
-  const { count, error: compError } = await supabase
-    .from('comprobantes')
-    .select('id', { count: 'exact', head: true })
-    .eq('orden_id', ordenId)
-
-  if (compError) {
-    throw new Error('No se pudo verificar el comprobante de pago')
-  }
-
-  if ((count ?? 0) > 0) {
-    throw new Error(
-      'No puede cancelar esta orden: ya subió un comprobante de pago o está en revisión',
-    )
   }
 
   const { data: actualizada, error: updateError } = await supabase

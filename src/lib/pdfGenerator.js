@@ -3,7 +3,7 @@ import autoTable from 'jspdf-autotable'
 import { fetchCategoriasDesdeBd, mapCategorias, nombreCategoria } from './categorias.js'
 import { ORDER_STATUS, SIGNED_URL_EXPIRY } from './constants.js'
 import { esEnvioIgualFiscal, getDireccionEnvio } from './datosCliente.js'
-import { getOrdenPdfPath } from './ordenes.js'
+import { getOrdenPdfPath } from './ordenPdfPaths.js'
 import { formatMXN, getTotalesOrdenDesglose, desglosePrecioLinea, precioHabitualLinea } from './pricing.js'
 
 function formatFecha(date = new Date()) {
@@ -318,3 +318,190 @@ export function downloadOrdenPDF(blob, fileName) {
   link.click()
   URL.revokeObjectURL(url)
 }
+
+/**
+ * Genera el PDF de una orden general al proveedor (datos del admin + líneas agregadas).
+ * Importes a precio_base del catálogo (sin aumentos de cliente).
+ * @returns {Blob}
+ */
+export function generateOrdenGeneralPDF({ meta, detalles, categoriaMap }) {
+  const doc = new jsPDF()
+  const envioIgual = meta.envio_igual_fiscal !== false
+
+  doc.setFontSize(18)
+  doc.setTextColor(0, 137, 123)
+  doc.text('Labotec — Orden general de compra', 14, 20)
+
+  doc.setFontSize(10)
+  doc.setTextColor(60, 60, 60)
+  let y = addLines(
+    doc,
+    [
+      meta.folio ? `Folio: ${meta.folio}` : null,
+      `Fecha de orden: ${formatFecha(new Date(meta.creado_en ?? Date.now()))}`,
+      'Importes calculados con precio base del catálogo (sin aumentos de cliente).',
+    ],
+    14,
+    30,
+  )
+
+  y += 4
+  doc.setFontSize(11)
+  doc.setTextColor(0, 0, 0)
+  doc.text('Datos de contacto', 14, y)
+  doc.setFontSize(9)
+  y = addLines(
+    doc,
+    [
+      `Nombre: ${meta.nombre ?? '—'}`,
+      `Correo: ${meta.email ?? '—'}`,
+      `Teléfono: ${meta.telefono ?? '—'}`,
+    ],
+    14,
+    y + 7,
+  )
+
+  y += 4
+  doc.setFontSize(11)
+  doc.text('Datos fiscales', 14, y)
+  doc.setFontSize(9)
+  y += 7
+  y = addWrappedLine(doc, 'Razón social', meta.razon_social, 14, y)
+  y = addWrappedLine(doc, 'RFC', meta.rfc, 14, y)
+  y = addWrappedLine(doc, 'Dirección fiscal', meta.direccion_fiscal, 14, y)
+  y = addWrappedLine(doc, 'Correo de facturación', meta.correo_facturacion, 14, y)
+
+  y += 4
+  doc.setFontSize(11)
+  doc.text('Datos de envío', 14, y)
+  doc.setFontSize(9)
+  y += 7
+  if (envioIgual) {
+    y = addWrappedLine(doc, 'Dirección de envío', meta.direccion_fiscal, 14, y)
+    doc.setTextColor(100, 100, 100)
+    y = addWrappedLine(doc, 'Nota', 'Igual a la dirección fiscal', 14, y)
+    doc.setTextColor(0, 0, 0)
+  } else {
+    y = addWrappedLine(doc, 'Dirección de envío', meta.direccion_envio, 14, y)
+  }
+
+  const sorted = [...(detalles ?? [])].sort((a, b) => {
+    const catA = nombreCategoria(a.categoria, categoriaMap)
+    const catB = nombreCategoria(b.categoria, categoriaMap)
+    return catA.localeCompare(catB) || String(a.codigo).localeCompare(String(b.codigo))
+  })
+
+  const tableBody = sorted.map((d) => [
+    d.codigo ?? '—',
+    d.descripcion ?? '—',
+    d.clase ?? '—',
+    nombreCategoria(d.categoria, categoriaMap),
+    String(d.cantidad ?? 0),
+    formatMXN(d.precio_base_unitario),
+    formatMXN(d.subtotal),
+  ])
+
+  autoTable(doc, {
+    startY: y + 4,
+    head: [['Código', 'Descripción', 'Clase', 'Categoría', 'Cant.', 'P. Base', 'Subtotal']],
+    body: tableBody,
+    styles: { fontSize: 7, cellPadding: 1.5 },
+    headStyles: { fillColor: [38, 166, 154] },
+    columnStyles: {
+      1: { cellWidth: 48 },
+      3: { cellWidth: 26 },
+      5: { halign: 'right' },
+      6: { halign: 'right' },
+    },
+  })
+
+  let finalY = doc.lastAutoTable.finalY + 8
+
+  const porCategoria = meta.desglosePorCategoria ?? []
+  if (porCategoria.length > 0) {
+    doc.setFontSize(11)
+    doc.setTextColor(0, 0, 0)
+    doc.text('Desglose por categoría', 14, finalY)
+    autoTable(doc, {
+      startY: finalY + 3,
+      head: [['Categoría', 'Líneas', 'Unidades', 'Subtotal', 'IVA (16%)', 'Total']],
+      body: porCategoria.map((row) => [
+        row.nombre,
+        String(row.lineas),
+        String(row.unidades),
+        formatMXN(row.subtotal),
+        formatMXN(row.iva),
+        formatMXN(row.total),
+      ]),
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [38, 166, 154] },
+      columnStyles: {
+        3: { halign: 'right' },
+        4: { halign: 'right' },
+        5: { halign: 'right' },
+      },
+    })
+    finalY = doc.lastAutoTable.finalY + 8
+  }
+
+  const porClase = meta.desglosePorClase ?? []
+  if (porClase.length > 0) {
+    if (finalY > 250) {
+      doc.addPage()
+      finalY = 20
+    }
+    doc.setFontSize(11)
+    doc.setTextColor(0, 0, 0)
+    doc.text('Desglose por clase', 14, finalY)
+    autoTable(doc, {
+      startY: finalY + 3,
+      head: [['Clase', 'Líneas', 'Unidades', 'Subtotal', 'IVA (16%)', 'Total']],
+      body: porClase.map((row) => [
+        row.clase,
+        String(row.lineas),
+        String(row.unidades),
+        formatMXN(row.subtotal),
+        formatMXN(row.iva),
+        formatMXN(row.total),
+      ]),
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [38, 166, 154] },
+      columnStyles: {
+        3: { halign: 'right' },
+        4: { halign: 'right' },
+        5: { halign: 'right' },
+      },
+    })
+    finalY = doc.lastAutoTable.finalY + 8
+  }
+
+  if (finalY > 260) {
+    doc.addPage()
+    finalY = 20
+  }
+
+  const subtotal = Number(meta.subtotal) || 0
+  const iva = Number(meta.iva) || 0
+  const total = Number(meta.total) || 0
+
+  doc.setFontSize(10)
+  doc.setTextColor(0, 0, 0)
+  doc.text(`Subtotal: ${formatMXN(subtotal)}`, 196, finalY, { align: 'right' })
+  doc.text(`IVA (16%): ${formatMXN(iva)}`, 196, finalY + 6, { align: 'right' })
+  doc.setFontSize(12)
+  doc.setFont(undefined, 'bold')
+  doc.text(`Total: ${formatMXN(total)}`, 196, finalY + 14, { align: 'right' })
+  doc.setFont(undefined, 'normal')
+
+  doc.setFontSize(8)
+  doc.setTextColor(120, 120, 120)
+  doc.text(
+    'Orden general al proveedor. Este documento no es una factura fiscal.',
+    14,
+    doc.internal.pageSize.height - 10,
+  )
+
+  return doc.output('blob')
+}
+
+export { getOrdenGeneralPdfPath } from './ordenPdfPaths.js'

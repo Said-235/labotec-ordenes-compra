@@ -1,4 +1,3 @@
-import { getSupabaseAdmin } from '../adminContext.js'
 import { nombreCategoria } from '../../lib/categorias.js'
 import { sanitizeText } from '../../lib/validation.js'
 
@@ -19,10 +18,10 @@ export function buildNotificacionComprobante({ tipo, categoria, ordenId, notasAd
 
   if (tipo === TIPOS_NOTIFICACION.comprobante_aprobado) {
     return {
-      titulo: `Pago aprobado — ${ref}`,
+      titulo: `Pedido aprobado — ${ref}`,
       mensaje: notas
-        ? `Su comprobante fue validado. Orden marcada como pagada. Nota: ${notas}`
-        : 'Su comprobante de pago fue validado. Su orden quedó marcada como pagada.',
+        ? `Administración confirmó su pago. Su orden quedó marcada como pagada. Nota: ${notas}`
+        : 'Administración confirmó su pago. Su orden quedó marcada como pagada.',
     }
   }
 
@@ -35,7 +34,7 @@ export function buildNotificacionComprobante({ tipo, categoria, ordenId, notasAd
 }
 
 /**
- * Crea notificación para el cliente (service role, al validar/rechazar comprobante).
+ * Crea notificación para el cliente (service role, al marcar una orden como pagada).
  */
 export async function crearNotificacionComprobante(
   admin,
@@ -48,14 +47,19 @@ export async function crearNotificacionComprobante(
     notasAdmin,
   })
 
-  const { error } = await admin.from('notificaciones').insert({
+  const row = {
     cliente_id: clienteId,
     orden_id: ordenId,
-    comprobante_id: comprobanteId,
     tipo,
     titulo: sanitizeText(titulo, 200),
     mensaje: sanitizeText(mensaje, 1000) || null,
-  })
+  }
+
+  if (comprobanteId) {
+    row.comprobante_id = comprobanteId
+  }
+
+  const { error } = await admin.from('notificaciones').insert(row)
 
   if (error) {
     console.error('No se pudo crear la notificación del cliente', error.code)

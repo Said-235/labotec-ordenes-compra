@@ -32,7 +32,12 @@ const cards = [
   {
     to: '/admin/ordenes',
     title: 'Órdenes',
-    description: 'Validar comprobantes y gestionar pagos',
+    description: 'Confirmar pagos y gestionar órdenes',
+  },
+  {
+    to: '/admin/orden-general',
+    title: 'Orden general',
+    description: 'Generar el pedido consolidado al proveedor desde órdenes pagadas',
   },
 ]
 
@@ -60,11 +65,10 @@ export default function Dashboard() {
       )}
 
       {stats && (
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-6 grid gap-4 sm:grid-cols-3">
           <Stat label="Clientes activos" value={stats.clientes} />
           <Stat label="Productos activos" value={stats.productos} />
-          <Stat label="Órdenes pendientes" value={stats.ordenesPendientes} />
-          <Stat label="Comprobantes por validar" value={stats.comprobantesPendientes} highlight />
+          <Stat label="Órdenes pendientes" value={stats.ordenesPendientes} highlight />
         </div>
       )}
 

@@ -38,12 +38,4 @@ export const ORDER_STATUS = {
   vencida: 'Vencida',
 }
 
-export const ALLOWED_COMPROBANTE_TYPES = [
-  'application/pdf',
-  'image/jpeg',
-  'image/png',
-]
-
-export const ALLOWED_COMPROBANTE_EXTENSIONS = ['.pdf', '.jpg', '.jpeg', '.png']
-
 export const SIGNED_URL_EXPIRY = 60 * 60

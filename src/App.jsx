@@ -22,6 +22,7 @@ const MiCuenta = lazy(() => import('./pages/cliente/MiCuenta'))
 const Dashboard = lazy(() => import('./pages/admin/Dashboard'))
 const CargaODS = lazy(() => import('./pages/admin/CargaODS'))
 const OrdenesAdmin = lazy(() => import('./pages/admin/Ordenes'))
+const OrdenGeneral = lazy(() => import('./pages/admin/OrdenGeneral'))
 const Clientes = lazy(() => import('./pages/admin/Clientes'))
 const Administradores = lazy(() => import('./pages/admin/Administradores'))
 const Categorias = lazy(() => import('./pages/admin/Categorias'))
@@ -71,6 +72,7 @@ export default function App() {
                       <Route path="/admin/productos" element={<Productos />} />
                       <Route path="/admin/carga-ods" element={<CargaODS />} />
                       <Route path="/admin/ordenes" element={<OrdenesAdmin />} />
+                      <Route path="/admin/orden-general" element={<OrdenGeneral />} />
                     </Route>
                   </Route>
 

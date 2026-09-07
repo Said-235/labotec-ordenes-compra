@@ -10,6 +10,7 @@ const navItems = [
   { to: '/admin/productos', label: 'Productos' },
   { to: '/admin/carga-ods', label: 'Carga ODS' },
   { to: '/admin/ordenes', label: 'Órdenes' },
+  { to: '/admin/orden-general', label: 'Orden general' },
 ]
 
 function NavItems({ onNavigate }) {

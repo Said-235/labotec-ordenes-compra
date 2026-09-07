@@ -89,7 +89,7 @@ export default function Notificaciones() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Notificaciones</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Avisos cuando su comprobante de pago es aprobado o rechazado
+            Avisos cuando administración aprueba su pedido
           </p>
         </div>
         {noLeidas > 0 && (
@@ -116,7 +116,7 @@ export default function Notificaciones() {
         <div className="mt-8 rounded-xl border border-dashed border-gray-200 bg-white px-6 py-12 text-center">
           <p className="text-gray-600">No tiene notificaciones por ahora.</p>
           <p className="mt-2 text-sm text-gray-400">
-            Cuando validemos o rechacemos un comprobante, el aviso aparecerá aquí.
+            Cuando administración confirme su pago, el aviso aparecerá aquí.
           </p>
         </div>
       ) : (

@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { useCategorias } from '../../hooks/useCategorias'
-import ComprobanteUpload from '../../components/ComprobanteUpload'
 import DetalleOrdenTabla from '../../components/DetalleOrdenTabla'
 import StatusBadge from '../../components/StatusBadge'
-import { getComprobanteSignedUrl } from '../../lib/comprobantes'
 import { getSafeErrorMessage } from '../../lib/errors'
 import { obtenerMisOrdenes, getOrdenPdfUrl, cancelarOrden, puedeCancelarOrden } from '../../lib/ordenes'
 import { formatMXN } from '../../lib/pricing'
@@ -29,7 +27,6 @@ export default function MisOrdenes() {
   const [filtroStatus, setFiltroStatus] = useState('')
   const [confirmarCancelar, setConfirmarCancelar] = useState(null)
   const [cancelando, setCancelando] = useState(false)
-  const [mostrarExitoComprobante, setMostrarExitoComprobante] = useState(false)
 
   const cargarOrdenes = useCallback(async () => {
     setLoading(true)
@@ -54,11 +51,6 @@ export default function MisOrdenes() {
     }
   }, [ordenDestacada, ordenes])
 
-  async function handleComprobanteSubido() {
-    setMostrarExitoComprobante(true)
-    await cargarOrdenes()
-  }
-
   async function handleDescargarPdf(orden) {
     if (!cliente) return
     try {
@@ -69,22 +61,11 @@ export default function MisOrdenes() {
     }
   }
 
-  async function handleVerComprobante(path) {
-    try {
-      const url = await getComprobanteSignedUrl(path)
-      window.open(url, '_blank', 'noopener,noreferrer')
-    } catch {
-      setError('No se pudo abrir el comprobante')
-    }
-  }
-
   async function handleCancelarOrden() {
     if (!confirmarCancelar) return
     if (!puedeCancelarOrden(confirmarCancelar)) {
       setConfirmarCancelar(null)
-      setError(
-        'No puede cancelar esta orden: ya subió un comprobante de pago o está en revisión',
-      )
+      setError('Solo puede cancelar órdenes pendientes de pago')
       return
     }
     setCancelando(true)
@@ -111,7 +92,7 @@ export default function MisOrdenes() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Mis órdenes</h1>
-          <p className="mt-1 text-sm text-gray-500">Historial y comprobantes de pago</p>
+          <p className="mt-1 text-sm text-gray-500">Historial de pedidos</p>
         </div>
 
         <select
@@ -140,11 +121,7 @@ export default function MisOrdenes() {
       ) : (
         <div className="mt-6 space-y-4">
           {ordenesFiltradas.map((orden) => {
-            const comprobante = orden.comprobantes?.[0]
             const expanded = expandedId === orden.id
-            const puedeSubirComprobante =
-              orden.status === 'pendiente' &&
-              (!comprobante || comprobante.rechazado)
             const puedeCancelar = puedeCancelarOrden(orden)
 
             return (
@@ -189,65 +166,12 @@ export default function MisOrdenes() {
                       )}
                     </div>
 
-                    {puedeCancelar && (
+                    {orden.status === 'pendiente' && (
                       <p className="mt-2 text-xs text-gray-500">
-                        Puede cancelar mientras no haya subido un comprobante de pago.
+                        Pendiente de pago. Recibirá un aviso en Notificaciones cuando administración
+                        lo confirme.
                       </p>
                     )}
-
-                    {comprobante && (
-                      <div className="mt-3 rounded-lg bg-gray-50 p-3 text-sm">
-                        <p className="font-medium text-gray-700">Comprobante</p>
-                        <p className="mt-1 text-xs text-gray-500">
-                          Subido: {formatFecha(comprobante.creado_en)}
-                          {comprobante.validado && comprobante.validado_en && (
-                            <> — Validado: {formatFecha(comprobante.validado_en)}</>
-                          )}
-                        </p>
-                        {!comprobante.rechazado && (
-                          <button
-                            type="button"
-                            onClick={() => handleVerComprobante(comprobante.url_archivo)}
-                            className="mt-2 text-xs text-labotec-teal hover:underline"
-                          >
-                            Ver comprobante
-                          </button>
-                        )}
-                        {!comprobante.validado && !comprobante.rechazado && (
-                          <p className="mt-2 text-xs text-amber-700">
-                            En revisión por administración
-                          </p>
-                        )}
-                        {comprobante.validado && comprobante.notas_admin && (
-                          <p className="mt-2 text-xs text-gray-600">
-                            Notas: {comprobante.notas_admin}
-                          </p>
-                        )}
-                        {comprobante.rechazado && (
-                          <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-800">
-                            <p className="font-semibold">Comprobante rechazado</p>
-                            {comprobante.rechazado_en && (
-                              <p className="mt-1 text-red-600">
-                                {formatFecha(comprobante.rechazado_en)}
-                              </p>
-                            )}
-                            <p className="mt-2">
-                              <span className="font-medium">Motivo: </span>
-                              {comprobante.notas_admin || 'Sin detalle'}
-                            </p>
-                            <p className="mt-2 text-red-700">
-                              Suba un nuevo comprobante corregido.
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    <ComprobanteUpload
-                      ordenId={orden.id}
-                      disabled={!puedeSubirComprobante}
-                      onSuccess={handleComprobanteSubido}
-                    />
 
                     {orden.detalle_orden?.length > 0 && (
                       <DetalleOrdenTabla orden={orden} />
@@ -257,42 +181,6 @@ export default function MisOrdenes() {
               </article>
             )
           })}
-        </div>
-      )}
-
-      {mostrarExitoComprobante && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div
-            className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
-            role="dialog"
-            aria-labelledby="comprobante-exito-titulo"
-          >
-            <h2 id="comprobante-exito-titulo" className="text-lg font-semibold text-gray-900">
-              Comprobante recibido
-            </h2>
-            <p className="mt-3 text-sm text-gray-600">
-              Su comprobante de pago fue enviado correctamente. Su orden está siendo revisada por
-              administración.
-            </p>
-            <p className="mt-2 text-sm text-gray-600">
-              Esté al tanto de sus{' '}
-              <Link
-                to="/notificaciones"
-                className="font-medium text-labotec-teal hover:underline"
-                onClick={() => setMostrarExitoComprobante(false)}
-              >
-                notificaciones
-              </Link>
-              : le avisaremos cuando su pago sea aprobado o si necesitamos un comprobante corregido.
-            </p>
-            <button
-              type="button"
-              onClick={() => setMostrarExitoComprobante(false)}
-              className="mt-6 w-full rounded-lg bg-labotec-teal py-2.5 text-sm font-semibold text-white hover:bg-labotec-teal-dark"
-            >
-              Entendido
-            </button>
-          </div>
         </div>
       )}
 
@@ -306,7 +194,7 @@ export default function MisOrdenes() {
               <strong>{formatMXN(confirmarCancelar.total)}</strong>?
             </p>
             <p className="mt-2 text-xs text-amber-700">
-              Esta acción no se puede deshacer. Solo es posible si no ha subido un comprobante.
+              Esta acción no se puede deshacer. Solo es posible mientras la orden esté pendiente.
             </p>
             <div className="mt-5 flex gap-3">
               <button
