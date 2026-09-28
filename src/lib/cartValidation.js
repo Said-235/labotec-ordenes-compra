@@ -1,5 +1,8 @@
 import { sanitizeText } from './validation.js'
-import { MULTIPLICADOR_PRECIO_SIN_REACTIVO } from './constants.js'
+import {
+  CATEGORIA_EXENTA_REGLA_CALIBRADOR,
+  MULTIPLICADOR_PRECIO_SIN_REACTIVO,
+} from './constants.js'
 
 export const CLASES_REQUIEREN_REACTIVO = ['Calibrador', 'Control']
 
@@ -8,6 +11,18 @@ export const CLASES_REQUIEREN_REACTIVO = ['Calibrador', 'Control']
  */
 export function clienteAplicaReglaCalibradorControl(cliente) {
   return cliente?.aplica_regla_calibrador_control !== false
+}
+
+export function categoriaExentaReglaCalibrador(categoria) {
+  return categoria === CATEGORIA_EXENTA_REGLA_CALIBRADOR
+}
+
+/**
+ * La regla del cliente no aplica en Química clínica, esté o no en su catálogo.
+ */
+export function aplicaReglaCalibradorEnCategoria(aplicaCliente, categoria) {
+  if (categoriaExentaReglaCalibrador(categoria)) return false
+  return aplicaCliente !== false
 }
 
 /**
@@ -144,8 +159,8 @@ export function puedeAgregarAlCarrito(
     }
   }
 
-  // Cliente exento: solo exige grupo de prueba configurado
-  if (!aplicaReglaCalibradorControl) {
+  // Cliente exento, o categoría exenta (Química clínica): solo exige grupo de prueba.
+  if (!aplicaReglaCalibradorEnCategoria(aplicaReglaCalibradorControl, producto.categoria)) {
     return { ok: true }
   }
 
@@ -183,7 +198,7 @@ export function puedeActualizarCantidad(
     }
   }
 
-  if (!aplicaReglaCalibradorControl) {
+  if (!aplicaReglaCalibradorEnCategoria(aplicaReglaCalibradorControl, item.categoria)) {
     return { ok: true }
   }
 

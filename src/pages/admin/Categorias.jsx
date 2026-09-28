@@ -56,11 +56,17 @@ export default function CategoriasAdmin() {
     }
   }
 
-  async function handleToggle(clave, activoActual) {
+  async function handleToggle(cat) {
     setError('')
+    const quiereActiva = !cat.activo
     try {
-      await actualizarEstadoCategoria(clave, !activoActual)
-      flash(activoActual ? 'Categoría desactivada' : 'Categoría reactivada')
+      const actualizada = await actualizarEstadoCategoria(cat.clave, quiereActiva)
+      setCategorias((prev) =>
+        prev.map((row) =>
+          row.clave === cat.clave ? { ...row, ...actualizada, activo: quiereActiva } : row,
+        ),
+      )
+      flash(quiereActiva ? 'Categoría reactivada' : 'Categoría desactivada')
       await cargar()
       await refreshCategorias()
     } catch (err) {
@@ -74,7 +80,7 @@ export default function CategoriasAdmin() {
     <div className="p-6">
       <h1 className="text-2xl font-bold text-gray-900">Categorías</h1>
       <p className="mt-1 text-sm text-gray-500">
-        Administre las categorías de productos y órdenes de compra
+        Administre las categorías de productos y órdenes de compra. Solo se puede desactivar una categoría que no tenga productos activos.
       </p>
 
       {error && (
@@ -152,7 +158,7 @@ export default function CategoriasAdmin() {
                   <td className="px-4 py-3">
                     <button
                       type="button"
-                      onClick={() => handleToggle(cat.clave, cat.activo)}
+                      onClick={() => handleToggle(cat)}
                       className={`text-xs hover:underline ${
                         cat.activo ? 'text-red-600' : 'text-green-600'
                       }`}

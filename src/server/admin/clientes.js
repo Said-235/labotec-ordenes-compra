@@ -1,8 +1,9 @@
 import { CLASES_PRODUCTO } from '../../lib/constants.js'
 import {
   aumentosPorClaseVacios,
-  normalizarAumentosPorClase,
-  sanitizePorcentaje,
+  aumentoLegadoReferencia,
+  esMapaAumentosAnidado,
+  normalizarAumentosPorCategoria,
 } from '../../lib/pricing.js'
 import { assertAdminSession, getSupabaseAdmin } from '../adminContext.js'
 import { isValidEmail, sanitizeText } from '../../lib/validation.js'
@@ -38,7 +39,7 @@ function validateAumentosPorClase(raw) {
     return Object.fromEntries(CLASES_PRODUCTO.map((clase) => [clase, pct]))
   }
 
-  if (typeof raw !== 'object') {
+  if (typeof raw !== 'object' || Array.isArray(raw)) {
     throw new Error('Aumentos por clase inválidos')
   }
 
@@ -49,6 +50,62 @@ function validateAumentosPorClase(raw) {
   }
 
   return map
+}
+
+async function clavesCategoriasActivas() {
+  const admin = getSupabaseAdmin()
+  const { data, error } = await admin
+    .from('categorias')
+    .select('clave')
+    .eq('activo', true)
+    .order('orden')
+    .order('nombre')
+
+  if (error) throw new Error('No se pudieron cargar las categorías')
+  return (data ?? []).map((row) => row.clave).filter(Boolean)
+}
+
+function validateCategoriasVisibles(raw, clavesValidas) {
+  if (!Array.isArray(raw)) throw new Error('Seleccione al menos una categoría')
+
+  const permitidas = new Set(clavesValidas)
+  const elegidas = []
+  for (const clave of raw) {
+    const clean = sanitizeText(String(clave ?? ''), 50)
+    if (!clean) continue
+    if (!permitidas.has(clean)) throw new Error('Categoría inválida')
+    if (!elegidas.includes(clean)) elegidas.push(clean)
+  }
+
+  if (!elegidas.length) throw new Error('Seleccione al menos una categoría')
+  return elegidas
+}
+
+function validateAumentosPorCategoria(raw, categoriaKeys) {
+  if (
+    raw == null ||
+    typeof raw === 'number' ||
+    typeof raw === 'string' ||
+    (typeof raw === 'object' && !Array.isArray(raw) && !esMapaAumentosAnidado(raw))
+  ) {
+    const plano = validateAumentosPorClase(raw ?? 0)
+    return Object.fromEntries(categoriaKeys.map((clave) => [clave, { ...plano }]))
+  }
+
+  if (typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new Error('Aumentos por clase inválidos')
+  }
+
+  const permitidas = new Set(categoriaKeys)
+  const result = {}
+  for (const [clave, slice] of Object.entries(raw)) {
+    if (!permitidas.has(clave)) continue
+    result[clave] = validateAumentosPorClase(slice ?? {})
+  }
+  for (const clave of categoriaKeys) {
+    if (!result[clave]) result[clave] = aumentosPorClaseVacios()
+  }
+  return result
 }
 
 /** Interpreta el flag de regla Calibrador/Control (default true). */
@@ -68,16 +125,18 @@ export async function listarClientes() {
   await assertAdminSession()
   const admin = getSupabaseAdmin()
 
-  const [{ data, error }, { data: pendientes, error: pendientesError }] = await Promise.all([
-    admin
-      .from('clientes')
-      .select(
-        'id, nombre, email, porcentaje_aumento, aumentos_por_clase, aplica_regla_calibrador_control, primer_login, activo, creado_en, datos_fiscales',
-      )
-      .eq('es_admin', false)
-      .order('nombre'),
-    admin.from('ordenes').select('cliente_id').eq('status', 'pendiente'),
-  ])
+  const [{ data, error }, { data: pendientes, error: pendientesError }, claves] =
+    await Promise.all([
+      admin
+        .from('clientes')
+        .select(
+          'id, nombre, email, porcentaje_aumento, aumentos_por_clase, categorias_visibles, aplica_regla_calibrador_control, primer_login, activo, creado_en, datos_fiscales',
+        )
+        .eq('es_admin', false)
+        .order('nombre'),
+      admin.from('ordenes').select('cliente_id').eq('status', 'pendiente'),
+      clavesCategoriasActivas(),
+    ])
 
   if (error) throw new Error('No se pudieron cargar los clientes')
   if (pendientesError) throw new Error('No se pudieron verificar las órdenes pendientes')
@@ -90,7 +149,8 @@ export async function listarClientes() {
     aplica_regla_calibrador_control: normalizeAplicaReglaCalibradorControl(
       c.aplica_regla_calibrador_control,
     ),
-    aumentos_por_clase: normalizarAumentosPorClase(c),
+    categorias_visibles: Array.isArray(c.categorias_visibles) ? c.categorias_visibles : [],
+    aumentos_por_clase: normalizarAumentosPorCategoria(c, claves),
     tiene_ordenes_pendientes: conPendientes.has(c.id),
   }))
 }
@@ -104,6 +164,7 @@ export async function crearCliente({
   password,
   aumentos_por_clase,
   porcentaje_aumento,
+  categorias_visibles,
   aplica_regla_calibrador_control,
 }) {
   await assertAdminSession()
@@ -112,10 +173,13 @@ export async function crearCliente({
   const cleanNombre = sanitizeText(nombre, 200)
   const cleanEmail = sanitizeText(email, 254).toLowerCase()
   const cleanPassword = validatePassword(password)
-  const cleanAumentos = validateAumentosPorClase(
+  const claves = await clavesCategoriasActivas()
+  const cleanVisibles = validateCategoriasVisibles(categorias_visibles, claves)
+  const cleanAumentos = validateAumentosPorCategoria(
     aumentos_por_clase ?? porcentaje_aumento ?? 0,
+    claves,
   )
-  const cleanAumentoLegado = sanitizePorcentaje(cleanAumentos.Reactivo)
+  const cleanAumentoLegado = aumentoLegadoReferencia(cleanAumentos, cleanVisibles)
   const aplicaRegla = normalizeAplicaReglaCalibradorControl(
     aplica_regla_calibrador_control,
   )
@@ -144,6 +208,7 @@ export async function crearCliente({
     nivel: 1,
     porcentaje_aumento: cleanAumentoLegado,
     aumentos_por_clase: cleanAumentos,
+    categorias_visibles: cleanVisibles,
     aplica_regla_calibrador_control: aplicaRegla,
     primer_login: true,
     activo: true,
@@ -162,14 +227,20 @@ export async function crearCliente({
  */
 export async function actualizarCliente(
   clienteId,
-  { nombre, aumentos_por_clase, porcentaje_aumento, aplica_regla_calibrador_control },
+  {
+    nombre,
+    aumentos_por_clase,
+    porcentaje_aumento,
+    categorias_visibles,
+    aplica_regla_calibrador_control,
+  },
 ) {
   await assertAdminSession()
   const admin = getSupabaseAdmin()
 
   const { data: perfil, error: lookupError } = await admin
     .from('clientes')
-    .select('id, es_admin')
+    .select('id, es_admin, aumentos_por_clase, categorias_visibles')
     .eq('id', clienteId)
     .single()
 
@@ -189,15 +260,32 @@ export async function actualizarCliente(
     updates.nombre = cleanNombre
   }
 
-  if (aumentos_por_clase != null) {
-    const cleanAumentos = validateAumentosPorClase(aumentos_por_clase)
-    updates.aumentos_por_clase = cleanAumentos
-    updates.porcentaje_aumento = sanitizePorcentaje(cleanAumentos.Reactivo)
-  } else if (porcentaje_aumento != null) {
-    // Compat: un solo % se replica a todas las clases
-    const cleanAumentos = validateAumentosPorClase(porcentaje_aumento)
-    updates.aumentos_por_clase = cleanAumentos
-    updates.porcentaje_aumento = sanitizePorcentaje(cleanAumentos.Reactivo)
+  const cambiaCondiciones =
+    aumentos_por_clase != null ||
+    porcentaje_aumento != null ||
+    categorias_visibles != null
+
+  if (cambiaCondiciones) {
+    const claves = await clavesCategoriasActivas()
+
+    if (categorias_visibles != null) {
+      updates.categorias_visibles = validateCategoriasVisibles(categorias_visibles, claves)
+    }
+
+    if (aumentos_por_clase != null || porcentaje_aumento != null) {
+      updates.aumentos_por_clase = validateAumentosPorCategoria(
+        aumentos_por_clase ?? porcentaje_aumento,
+        claves,
+      )
+    }
+
+    const mapa =
+      updates.aumentos_por_clase ??
+      normalizarAumentosPorCategoria(perfil, claves)
+    const visibles =
+      updates.categorias_visibles ??
+      (Array.isArray(perfil.categorias_visibles) ? perfil.categorias_visibles : [])
+    updates.porcentaje_aumento = aumentoLegadoReferencia(mapa, visibles)
   }
 
   if (aplica_regla_calibrador_control != null) {

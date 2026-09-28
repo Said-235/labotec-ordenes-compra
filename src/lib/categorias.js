@@ -44,6 +44,13 @@ export function esCategoriaValida(clave, keys) {
   return keys.includes(clave)
 }
 
+/** El cliente solo compra categorías que el admin le asignó. */
+export function clientePuedeVerCategoria(cliente, categoria) {
+  const lista = cliente?.categorias_visibles
+  if (!Array.isArray(lista)) return true
+  return lista.includes(categoria)
+}
+
 export async function fetchCategoriasDesdeBd(client, { soloActivas = true } = {}) {
   let query = client
     .from('categorias')

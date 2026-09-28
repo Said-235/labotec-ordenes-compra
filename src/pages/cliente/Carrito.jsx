@@ -19,12 +19,12 @@ import {
   getMensajeAvisoCorte,
   getResumenAvisoCorte,
 } from '../../lib/cortePedidos'
+import { clientePuedeVerCategoria } from '../../lib/categorias'
 import { confirmarOrden } from '../../lib/orders/confirmarOrden'
 import {
   calcularTotalesOrden,
   expandirLineasConCoberturaReactivo,
   formatMXN,
-  normalizarAumentosPorClase,
 } from '../../lib/pricing'
 import { supabase } from '../../lib/supabaseClient'
 
@@ -50,6 +50,10 @@ export default function Carrito() {
   const [avisoCortePendiente, setAvisoCortePendiente] = useState(false)
   const avisoCorteActivo = esVentanaMantenimientoCorte()
   const mensajeCorte = getMensajeAvisoCorte()
+
+  const hayNoDisponibles = items.some(
+    (item) => !clientePuedeVerCategoria(cliente, item.categoria),
+  )
 
   const porCategoria = items.reduce((acc, item) => {
     if (!acc[item.categoria]) acc[item.categoria] = []
@@ -79,15 +83,19 @@ export default function Carrito() {
         .map((item) => {
           const producto = productoMap[item.producto_id]
           if (!producto) return null
+          if (!clientePuedeVerCategoria(cliente, producto.categoria)) return null
           return { producto, cantidad: item.cantidad }
         })
         .filter(Boolean)
 
-      if (!lineasInput.length) return
+      if (!lineasInput.length) {
+        setTotalesCarrito(null)
+        return
+      }
 
       const lineas = expandirLineasConCoberturaReactivo(
         lineasInput,
-        normalizarAumentosPorClase(cliente),
+        cliente,
         { aplicaReglaCalibradorControl: clienteAplicaReglaCalibradorControl(cliente) },
       )
       const subtotal = lineas.reduce((sum, l) => sum + l.subtotal, 0)
@@ -103,6 +111,11 @@ export default function Carrito() {
   function handleConfirmarClick() {
     setError('')
     setMensajeItem('')
+
+    if (hayNoDisponibles) {
+      setError('Quite los productos de categorías que ya no tiene asignadas antes de confirmar.')
+      return
+    }
 
     if (!esValido) {
       setError(
@@ -318,10 +331,19 @@ export default function Carrito() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {lineas.map((item) => (
-                      <tr key={item.producto_id}>
+                    {lineas.map((item) => {
+                      const noDisponible = !clientePuedeVerCategoria(cliente, item.categoria)
+                      return (
+                      <tr key={item.producto_id} className={noDisponible ? 'bg-amber-50' : undefined}>
                         <td className="px-4 py-3 font-mono text-xs">{item.codigo}</td>
-                        <td className="px-4 py-3">{item.descripcion}</td>
+                        <td className="px-4 py-3">
+                          {item.descripcion}
+                          {noDisponible && (
+                            <p className="mt-1 text-xs text-amber-800">
+                              No disponible para su cuenta
+                            </p>
+                          )}
+                        </td>
                         <td className="px-4 py-3">
                           <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs">
                             {item.clase}
@@ -352,12 +374,19 @@ export default function Carrito() {
                           </button>
                         </td>
                       </tr>
-                    ))}
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
             </section>
           ))}
+
+          {hayNoDisponibles && (
+            <div className="mt-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              Quite los productos de categorías que ya no tiene asignadas antes de confirmar.
+            </div>
+          )}
 
           {violacionesReactivo.length > 0 && (
             <div className="mt-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800 whitespace-pre-line">
@@ -403,7 +432,7 @@ export default function Carrito() {
             <button
               type="button"
               onClick={handleConfirmarClick}
-              disabled={!esValido || confirmando}
+              disabled={!esValido || confirmando || hayNoDisponibles}
               className="w-full rounded-lg bg-labotec-teal px-6 py-2.5 text-sm font-semibold text-white hover:bg-labotec-teal-dark disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
             >
               {confirmando ? 'Confirmando…' : 'Confirmar orden'}

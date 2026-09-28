@@ -6,6 +6,9 @@ export const CATEGORIAS = {
 
 export const CATEGORIA_KEYS = Object.keys(CATEGORIAS)
 
+/** Química clínica no entra en la regla Calibrador/Control, aunque el cliente la tenga activa. */
+export const CATEGORIA_EXENTA_REGLA_CALIBRADOR = 'quimica_clinica'
+
 export const CLASES_PRODUCTO = [
   'Reactivo',
   'Calibrador',

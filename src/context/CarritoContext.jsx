@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { useAuth } from '../hooks/useAuth'
 import { MAX_CANTIDAD_CARRITO } from '../lib/constants'
 import {
+  aplicaReglaCalibradorEnCategoria,
   clienteAplicaReglaCalibradorControl,
   puedeAgregarAlCarrito,
   puedeActualizarCantidad,
@@ -62,7 +63,10 @@ export function CarritoProvider({ children }) {
       const validacion = puedeAgregarAlCarrito(producto, items, {
         ...opciones,
         cantidad: qty,
-        aplicaReglaCalibradorControl: aplicaRegla,
+        aplicaReglaCalibradorControl: aplicaReglaCalibradorEnCategoria(
+          aplicaRegla,
+          producto.categoria,
+        ),
       })
       if (!validacion.ok) return validacion
 
@@ -117,7 +121,10 @@ export function CarritoProvider({ children }) {
 
       const validacion = puedeActualizarCantidad(item, qty, items, {
         ...opciones,
-        aplicaReglaCalibradorControl: aplicaRegla,
+        aplicaReglaCalibradorControl: aplicaReglaCalibradorEnCategoria(
+          aplicaRegla,
+          item.categoria,
+        ),
       })
       if (!validacion.ok) return validacion
 

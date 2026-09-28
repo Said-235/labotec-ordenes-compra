@@ -70,15 +70,40 @@ export async function crearCategoria({ nombre, clave: claveInput }) {
   return data
 }
 
+function esCategoriaActiva(valor) {
+  if (valor === true || valor === 1) return true
+  if (valor === false || valor === 0 || valor == null) return false
+  const s = String(valor).trim().toLowerCase()
+  if (s === 'true' || s === 't' || s === '1') return true
+  if (s === 'false' || s === 'f' || s === '0' || s === '') return false
+  return Boolean(valor)
+}
+
 export async function actualizarEstadoCategoria(clave, activo) {
   await assertAdminSession()
   const admin = getSupabaseAdmin()
+  const claveLimpia = sanitizeText(clave, 50)
+  if (!claveLimpia) throw new Error('Categoría inválida')
 
-  if (!activo) {
+  const quiereActiva = esCategoriaActiva(activo)
+
+  const { data: actual, error: lookupError } = await admin
+    .from('categorias')
+    .select('clave, activo')
+    .eq('clave', claveLimpia)
+    .maybeSingle()
+
+  if (lookupError || !actual) throw new Error('Categoría inválida')
+
+  if (esCategoriaActiva(actual.activo) === quiereActiva) {
+    return { ...actual, activo: quiereActiva }
+  }
+
+  if (!quiereActiva) {
     const { count, error: countError } = await admin
       .from('productos')
       .select('id', { count: 'exact', head: true })
-      .eq('categoria', clave)
+      .eq('categoria', claveLimpia)
       .eq('activo', true)
 
     if (countError) throw new Error('No se pudo verificar productos de la categoría')
@@ -87,9 +112,25 @@ export async function actualizarEstadoCategoria(clave, activo) {
     }
   }
 
-  const { error } = await admin.from('categorias').update({ activo }).eq('clave', clave)
+  const { data: updated, error } = await admin
+    .from('categorias')
+    .update({ activo: quiereActiva })
+    .eq('clave', claveLimpia)
+    .select('clave, nombre, activo, orden, creado_en')
+    .maybeSingle()
 
-  if (error) throw new Error('No se pudo actualizar la categoría')
+  if (error) {
+    console.error('[actualizarEstadoCategoria]', error.message, error.code, error.details)
+    throw new Error('No se pudo actualizar la categoría')
+  }
+
+  if (!updated || esCategoriaActiva(updated.activo) !== quiereActiva) {
+    throw new Error(
+      'No se pudo actualizar la categoría: la base de datos rechaza el cambio de estado.',
+    )
+  }
+
+  return { ...updated, activo: esCategoriaActiva(updated.activo) }
 }
 
 export async function obtenerClavesCategoriasActivas() {

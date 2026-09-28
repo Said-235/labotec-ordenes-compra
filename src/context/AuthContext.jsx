@@ -1,7 +1,7 @@
 import { createContext, useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { getSafeErrorMessage } from '../lib/errors'
-import { normalizarAumentosPorClase } from '../lib/pricing'
+import { normalizarAumentosPorCategoria } from '../lib/pricing'
 
 export const AuthContext = createContext(null)
 
@@ -9,7 +9,7 @@ async function fetchClienteProfile(userId) {
   const { data, error } = await supabase
     .from('clientes')
     .select(
-      'id, nombre, email, es_admin, porcentaje_aumento, aumentos_por_clase, aplica_regla_calibrador_control, primer_login, datos_fiscales, activo',
+      'id, nombre, email, es_admin, porcentaje_aumento, aumentos_por_clase, categorias_visibles, aplica_regla_calibrador_control, primer_login, datos_fiscales, activo',
     )
     .eq('id', userId)
     .single()
@@ -18,7 +18,11 @@ async function fetchClienteProfile(userId) {
   return {
     ...data,
     aplica_regla_calibrador_control: data.aplica_regla_calibrador_control !== false,
-    aumentos_por_clase: normalizarAumentosPorClase(data),
+    categorias_visibles: Array.isArray(data.categorias_visibles) ? data.categorias_visibles : [],
+    aumentos_por_clase: normalizarAumentosPorCategoria(
+      data,
+      Array.isArray(data.categorias_visibles) ? data.categorias_visibles : [],
+    ),
   }
 }
 

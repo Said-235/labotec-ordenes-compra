@@ -1,6 +1,7 @@
 import { supabase } from '../supabaseClient'
 import { MAX_CANTIDAD_CARRITO } from '../constants'
 import {
+  clientePuedeVerCategoria,
   fetchCategoriasDesdeBd,
   keysCategorias,
   mapCategorias,
@@ -12,7 +13,7 @@ import {
 import {
   expandirLineasConCoberturaReactivo,
   calcularTotalesOrden,
-  normalizarAumentosPorClase,
+  mapaPlanoCategoria,
   sanitizePorcentaje,
 } from '../pricing'
 
@@ -52,7 +53,7 @@ export async function confirmarOrden(cartItems) {
   const { data: cliente, error: clienteError } = await supabase
     .from('clientes')
     .select(
-      'id, nombre, email, nivel, porcentaje_aumento, aumentos_por_clase, aplica_regla_calibrador_control, datos_fiscales, activo, primer_login',
+      'id, nombre, email, nivel, es_admin, porcentaje_aumento, aumentos_por_clase, categorias_visibles, aplica_regla_calibrador_control, datos_fiscales, activo, primer_login',
     )
     .eq('id', user.id)
     .single()
@@ -69,9 +70,6 @@ export async function confirmarOrden(cartItems) {
     throw new Error('Complete sus datos fiscales antes de confirmar una orden')
   }
 
-  const aumentosAplicados = normalizarAumentosPorClase(cliente)
-  // Legado: descuento_aplicado sigue siendo numérico (usamos Reactivo como referencia)
-  const aumentoAplicado = sanitizePorcentaje(aumentosAplicados.Reactivo)
   // Snapshot legado: la BD aún exige nivel 1–3 (ya no afecta el precio)
   const nivelSnapshot = [1, 2, 3].includes(Number(cliente.nivel)) ? Number(cliente.nivel) : 1
   const aplicaReglaCalibradorControl = cliente.aplica_regla_calibrador_control !== false
@@ -116,7 +114,7 @@ export async function confirmarOrden(cartItems) {
   }))
   const lineasExpandidas = expandirLineasConCoberturaReactivo(
     lineasInput,
-    aumentosAplicados,
+    cliente,
     { aplicaReglaCalibradorControl },
   )
 
@@ -137,6 +135,9 @@ export async function confirmarOrden(cartItems) {
     if (!categoriaKeys.includes(linea.categoria)) {
       throw new Error('Categoría de producto inválida')
     }
+    if (!cliente.es_admin && !clientePuedeVerCategoria(cliente, linea.categoria)) {
+      throw new Error(`El producto ${linea.codigo} no está disponible para su cuenta`)
+    }
   }
 
   const violaciones = validarRestriccionReactivo(lineas)
@@ -154,6 +155,7 @@ export async function confirmarOrden(cartItems) {
     const subtotalOrden = lineasCategoria.reduce((sum, l) => sum + l.subtotal, 0)
     const incluirEnvio = i === 0
     const { subtotal, total } = calcularTotalesOrden(subtotalOrden, { incluirEnvio })
+    const aumentosCategoria = mapaPlanoCategoria(cliente, categoria)
 
     const { data: orden, error: ordenError } = await supabase
       .from('ordenes')
@@ -162,8 +164,8 @@ export async function confirmarOrden(cartItems) {
         categoria,
         status: 'pendiente',
         nivel_cliente: nivelSnapshot,
-        descuento_aplicado: aumentoAplicado,
-        aumentos_aplicados: aumentosAplicados,
+        descuento_aplicado: sanitizePorcentaje(aumentosCategoria.Reactivo),
+        aumentos_aplicados: aumentosCategoria,
         subtotal,
         total,
       })

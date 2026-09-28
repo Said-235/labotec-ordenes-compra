@@ -4,7 +4,11 @@ import {
   IVA_RATE,
   MULTIPLICADOR_PRECIO_SIN_REACTIVO,
 } from './constants.js'
-import { CLASES_REQUIEREN_REACTIVO, getClaveGrupoFromItem } from './cartValidation.js'
+import {
+  CLASES_REQUIEREN_REACTIVO,
+  aplicaReglaCalibradorEnCategoria,
+  getClaveGrupoFromItem,
+} from './cartValidation.js'
 
 /**
  * Mapa vacío de aumentos (todas las clases en 0).
@@ -13,9 +17,38 @@ export function aumentosPorClaseVacios() {
   return Object.fromEntries(CLASES_PRODUCTO.map((clase) => [clase, 0]))
 }
 
+function esObjetoPlano(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+/** Un slice de clases tiene valores numéricos, no otro mapa. */
+export function esSliceClases(value) {
+  if (!esObjetoPlano(value)) return false
+  const valores = Object.values(value)
+  if (!valores.length) return false
+  return valores.every((valor) => valor == null || typeof valor !== 'object')
+}
+
+/** Mapa { categoria: { Clase: number } }, no el mapa plano legado. */
+export function esMapaAumentosAnidado(map) {
+  if (!esObjetoPlano(map)) return false
+  return Object.values(map).some((valor) => esSliceClases(valor))
+}
+
+function extraerMapaAumentos(fuente) {
+  if (fuente == null) return null
+  if (typeof fuente === 'number' || typeof fuente === 'string') return fuente
+  if (!esObjetoPlano(fuente)) return null
+  if (esObjetoPlano(fuente.aumentos_por_clase)) return fuente.aumentos_por_clase
+  if (esObjetoPlano(fuente.aumentos_aplicados)) return fuente.aumentos_aplicados
+  return fuente
+}
+
 /**
  * Normaliza un mapa de aumentos (o un % legado) a { Clase: number }.
- * Acepta: objeto aumentos_por_clase, número único, o perfil de cliente.
+ * Acepta: objeto aumentos_por_clase plano, número único, o perfil de cliente.
+ * Un mapa anidado por categoría no se aplana: las clases quedan en 0
+ * y hay que resolverlas con la categoría.
  */
 export function normalizarAumentosPorClase(fuente) {
   const base = aumentosPorClaseVacios()
@@ -27,29 +60,85 @@ export function normalizarAumentosPorClase(fuente) {
     return Object.fromEntries(CLASES_PRODUCTO.map((clase) => [clase, pct]))
   }
 
-  const map =
-    fuente.aumentos_por_clase && typeof fuente.aumentos_por_clase === 'object'
-      ? fuente.aumentos_por_clase
-      : fuente.aumentos_aplicados && typeof fuente.aumentos_aplicados === 'object'
-        ? fuente.aumentos_aplicados
-        : fuente
+  const map = extraerMapaAumentos(fuente)
+  const anidado = esMapaAumentosAnidado(map)
 
   const legado =
-    fuente.porcentaje_aumento != null
+    !anidado && fuente.porcentaje_aumento != null
       ? sanitizePorcentaje(fuente.porcentaje_aumento)
-      : fuente.descuento_aplicado != null
+      : !anidado && fuente.descuento_aplicado != null
         ? sanitizePorcentaje(fuente.descuento_aplicado)
         : 0
 
   for (const clase of CLASES_PRODUCTO) {
-    if (map && map[clase] != null && map[clase] !== '') {
-      base[clase] = sanitizePorcentaje(map[clase])
-    } else {
+    const valor = map?.[clase]
+    if (valor != null && valor !== '' && typeof valor !== 'object') {
+      base[clase] = sanitizePorcentaje(valor)
+    } else if (!anidado) {
       base[clase] = legado
     }
   }
 
   return base
+}
+
+/**
+ * Normaliza a { categoria: { Clase: number } }.
+ * Un mapa plano se copia igual a cada clave recibida.
+ */
+export function normalizarAumentosPorCategoria(fuente, categoriaKeys = []) {
+  const raw = extraerMapaAumentos(fuente)
+  const keys = new Set(categoriaKeys.filter((clave) => typeof clave === 'string' && clave))
+
+  if (esMapaAumentosAnidado(raw)) {
+    for (const clave of Object.keys(raw)) {
+      if (esSliceClases(raw[clave])) keys.add(clave)
+    }
+    return Object.fromEntries(
+      [...keys].map((clave) => [
+        clave,
+        normalizarAumentosPorClase(esSliceClases(raw[clave]) ? raw[clave] : {}),
+      ]),
+    )
+  }
+
+  const plano = normalizarAumentosPorClase(
+    typeof raw === 'number' || typeof raw === 'string' ? raw : fuente,
+  )
+  if (!keys.size) return {}
+  return Object.fromEntries([...keys].map((clave) => [clave, { ...plano }]))
+}
+
+/**
+ * % de Reactivo de referencia para la columna numérica legada.
+ */
+export function aumentoLegadoReferencia(mapaAnidado, categoriasVisibles = []) {
+  const orden = [...categoriasVisibles, ...Object.keys(mapaAnidado ?? {})]
+  const vistas = new Set()
+  for (const clave of orden) {
+    if (vistas.has(clave)) continue
+    vistas.add(clave)
+    const slice = mapaAnidado?.[clave]
+    if (slice && slice.Reactivo != null && typeof slice.Reactivo !== 'object') {
+      return sanitizePorcentaje(slice.Reactivo)
+    }
+  }
+  return 0
+}
+
+/**
+ * Mapa plano de una categoría, para guardarlo en la orden.
+ * Órdenes viejas siguen siendo planas y se devuelven tal cual.
+ */
+export function mapaPlanoCategoria(fuente, categoria) {
+  const raw = extraerMapaAumentos(fuente)
+  if (categoria && esSliceClases(raw?.[categoria])) {
+    return normalizarAumentosPorClase(raw[categoria])
+  }
+  if (raw && typeof raw === 'object' && !esMapaAumentosAnidado(raw)) {
+    return normalizarAumentosPorClase(fuente)
+  }
+  return aumentosPorClaseVacios()
 }
 
 export function sanitizePorcentaje(porcentaje) {
@@ -60,12 +149,33 @@ export function sanitizePorcentaje(porcentaje) {
 }
 
 /**
- * Resuelve el % de aumento para una clase de producto.
+ * Resuelve el % de aumento para una clase.
+ * Con categoría, lee el mapa anidado. Sin categoría, lee el mapa plano
+ * (órdenes ya guardadas y perfiles sin migrar).
  */
-export function resolverAumento(fuente, clase) {
-  const map = normalizarAumentosPorClase(fuente)
-  if (clase && map[clase] != null) return map[clase]
-  return map.Reactivo ?? 0
+export function resolverAumento(fuente, clase, categoria) {
+  const raw = extraerMapaAumentos(fuente)
+
+  if (typeof raw === 'number' || typeof raw === 'string' || raw == null) {
+    const plano = normalizarAumentosPorClase(fuente)
+    if (clase && plano[clase] != null) return plano[clase]
+    return plano.Reactivo ?? 0
+  }
+
+  if (categoria && esSliceClases(raw[categoria])) {
+    const plano = normalizarAumentosPorClase(raw[categoria])
+    return plano[clase] ?? 0
+  }
+
+  if (raw[clase] != null && typeof raw[clase] !== 'object') {
+    return sanitizePorcentaje(raw[clase])
+  }
+
+  if (esMapaAumentosAnidado(raw)) return 0
+
+  const plano = normalizarAumentosPorClase(fuente)
+  if (clase && plano[clase] != null) return plano[clase]
+  return plano.Reactivo ?? 0
 }
 
 /**
@@ -116,7 +226,7 @@ export function calcularPrecioLinea(
   { unidadesCubiertas, cantidad } = {},
 ) {
   const precioBase = Number(producto.precio_base ?? producto.precio_base_unitario)
-  const aumento = resolverAumento(aumentosFuente, producto.clase)
+  const aumento = resolverAumento(aumentosFuente, producto.clase, producto.categoria)
   const precioNormal = calcularPrecioUnitario(precioBase, aumento)
 
   if (!CLASES_REQUIEREN_REACTIVO.includes(producto.clase)) {
@@ -176,13 +286,13 @@ export function calcularPreciosConCoberturaReactivo(
   return lineas.map(({ producto, cantidad }) => {
     const qty = Math.max(0, Math.floor(Number(cantidad) || 0))
     const precioBase = Number(producto.precio_base ?? producto.precio_base_unitario)
-    const aumento = resolverAumento(aumentosFuente, producto.clase)
+    const aumento = resolverAumento(aumentosFuente, producto.clase, producto.categoria)
     const precioNormal = calcularPrecioUnitario(precioBase, aumento)
     const precioDoble =
       Math.round(precioNormal * MULTIPLICADOR_PRECIO_SIN_REACTIVO * 100) / 100
 
     if (
-      !aplicaReglaCalibradorControl ||
+      !aplicaReglaCalibradorEnCategoria(aplicaReglaCalibradorControl, producto.categoria) ||
       !CLASES_REQUIEREN_REACTIVO.includes(producto.clase) ||
       qty <= 0
     ) {

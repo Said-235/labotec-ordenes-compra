@@ -9,6 +9,7 @@ import { supabase } from '../../lib/supabaseClient'
 import { MULTIPLICADOR_PRECIO_SIN_REACTIVO } from '../../lib/constants'
 import { mensajeConfirmacionPrecioDoble } from '../../lib/cartValidation'
 import { getSafeErrorMessage } from '../../lib/errors'
+import { clientePuedeVerCategoria } from '../../lib/categorias'
 import { calcularPrecioUnitario, formatMXN, resolverAumento } from '../../lib/pricing'
 import { sanitizeText } from '../../lib/validation'
 
@@ -27,12 +28,19 @@ export default function Catalogo() {
   const [confirmacionCarrito, setConfirmacionCarrito] = useState(null)
 
   const aumentos = cliente?.aumentos_por_clase ?? cliente
+  const categoriasVisibles = useMemo(
+    () => categoriaKeys.filter((key) => clientePuedeVerCategoria(cliente, key)),
+    [categoriaKeys, cliente],
+  )
 
   useEffect(() => {
-    if (categoriaKeys.length && !categoriaKeys.includes(categoria)) {
-      setCategoria(categoriaKeys[0])
+    if (categoriasVisibles.length && !categoriasVisibles.includes(categoria)) {
+      setCategoria(categoriasVisibles[0])
     }
-  }, [categoriaKeys, categoria])
+    if (!categoriasVisibles.length && categoria) {
+      setCategoria('')
+    }
+  }, [categoriasVisibles, categoria])
 
   useEffect(() => {
     async function cargarDatos() {
@@ -96,7 +104,7 @@ export default function Catalogo() {
     if (result.requiresConfirmacion) {
       const precioNormal = calcularPrecioUnitario(
         producto.precio_base,
-        resolverAumento(aumentos, producto.clase),
+        resolverAumento(aumentos, producto.clase, producto.categoria),
       )
       const precioDoble =
         Math.round(precioNormal * MULTIPLICADOR_PRECIO_SIN_REACTIVO * 100) / 100
@@ -175,7 +183,7 @@ export default function Catalogo() {
       <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
         <div className="max-w-full overflow-x-auto">
           <div className="flex w-max min-w-full rounded-lg border border-gray-200 bg-white p-1">
-            {categoriaKeys.map((key) => (
+            {categoriasVisibles.map((key) => (
               <button
                 key={key}
                 type="button"
@@ -220,7 +228,11 @@ export default function Catalogo() {
         </div>
       )}
 
-      {loading ? (
+      {!loading && categoriasVisibles.length === 0 ? (
+        <p className="mt-12 text-center text-gray-500">
+          Su cuenta no tiene categorías asignadas. Contacte al administrador.
+        </p>
+      ) : loading ? (
         <div className="mt-12 flex justify-center">
           <div className="h-10 w-10 animate-spin rounded-full border-4 border-labotec-teal border-t-transparent" />
         </div>
@@ -242,7 +254,7 @@ export default function Catalogo() {
               {productosFiltrados.map((producto) => {
                 const precioFinal = calcularPrecioUnitario(
                   producto.precio_base,
-                  resolverAumento(aumentos, producto.clase),
+                  resolverAumento(aumentos, producto.clase, producto.categoria),
                 )
 
                 return (
